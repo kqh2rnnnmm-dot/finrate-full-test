@@ -36,13 +36,12 @@ export function monthControl(month) {
 
 export function budgetBar(plan,spent) {
   const scale = Math.max(plan,spent,1);
-  return `<div class="fr-budget-bar" role="img" aria-label="План ${esc(amountText(plan))}, расход ${esc(amountText(spent))}"><span style="width:${Math.min(plan,spent)/scale*100}%"></span>${spent>plan?`<span class="fr-budget-over" style="width:${(spent-plan)/scale*100}%"></span>`:''}</div>`;
+  return `<div class="fr-budget-bar fr-budget-bar--wide" role="img" aria-label="План ${esc(amountText(plan))}, расход ${esc(amountText(spent))}"><span style="width:${Math.min(plan,spent)/scale*100}%"></span>${spent>plan?`<span class="fr-budget-over" style="width:${(spent-plan)/scale*100}%"></span>`:''}</div>`;
 }
 export function summary(month, budget) {
-  return heading('Сводка','',`<button type="button" class="fr-category-new" data-section-action="budget-settings" aria-label="Настройки сводки">⚙</button>`)+monthControl(month)+body(
+  return heading('Сводка','',`<button type="button" class="fr-category-new" data-section-action="budget-settings" aria-label="Настройки сводки">${icon('settings')}</button>`)+monthControl(month)+body(
     pair('Результат месяца',budget.result)+link('Получено','received','',moneyLabel(budget.income))+
-    link('Накопления','savings')+link('Можно тратить','money','',moneyLabel(budget.available))+
-    pair('План доходов',budget.expected)+
+    link('Накопления','savings')+
     budget.categories.map(c=>`<div class="fr-summary-category">${link(c.name,'share',c.id,moneyLabel(c.spent))}
       ${budgetBar(c.plan,c.spent)}${small('План '+amountText(c.plan))}
       ${c.spent>c.plan?`<p class="fr-over-budget">Бюджет превышен на ${amountText(c.spent-c.plan)}</p>`:''}</div>`).join('')
@@ -52,10 +51,11 @@ export function summary(month, budget) {
 export function shareScreen(state,categories,plan,step) {
   return heading(state.title)+`<div class="np-island fr-share-totals">
     <div class="np-row"><span>Распределено</span><strong data-share-total></strong></div>
-    <div class="fr-budget-bar"><span data-share-bar></span></div>
-    <div class="np-row"><span data-share-free></span><small>${amountText(plan)}</small></div>
+    <div class="fr-budget-bar fr-budget-bar--wide"><span data-share-bar></span></div>
+    <div class="np-row fr-share-caption"><span data-share-free></span><small>${amountText(plan)}</small></div>
+    ${state.single?'<p class="fr-share-caption" data-share-room></p>':''}
     <p class="fr-create-error" data-share-error role="status"></p>
-  </div>`+body(categories.map(c=>`<div class="fr-section-panel fr-share-panel">
+  </div>`+body(categories.map(c=>`<div class="fr-share-panel">
     ${state.single?'':link(c.name,'share-detail',c.id)}
     <div class="fr-share-values"><small data-share-amount></small>
       <label class="fr-share-field"><input type="text" inputmode="decimal" data-share-input data-id="${esc(c.id)}" aria-label="Процент ${esc(c.name)}" placeholder="0" value="${esc(state.values[c.id])}"><span>%</span></label>
@@ -67,11 +67,12 @@ export function shareScreen(state,categories,plan,step) {
 
 export function goalCard(goal,history=false) {
   const progress = goal.target ? Math.min(100,goal.accumulated/goal.target*100) : 0;
-  if (!history) return `<div class="fr-goal-preview">${link(goal.name,'goal',goal.categoryId)}${moneyLabel(goal.remaining)}
-    ${small('Можно тратить')}${goal.due?small(dateText(goal.due)):''}
+  if (!history) return `<button type="button" class="fr-goal-preview" data-section-action="goal" data-id="${esc(goal.categoryId)}">
+    <span class="fr-goal-heading"><strong>${esc(goal.name)}</strong>${icon('next')}</span>
+    ${moneyLabel(goal.remaining)}${small('Можно тратить')}${goal.due?small(dateText(goal.due)):''}
     <progress max="${goal.target}" value="${Math.min(goal.target,goal.accumulated)}" aria-label="Прогресс накопления"></progress>
     ${small('Накоплено '+amountText(goal.accumulated)+' из '+amountText(goal.target))}
-  </div>`;
+  </button>`;
   return panel((history?`<h2 class="fr-section-title">${esc(goal.name)}</h2>`:link(goal.name,'goal',goal.categoryId))+
     (goal.due?small(dateText(goal.due)):'')+pair('Цель',goal.target)+pair('Накоплено',goal.accumulated)+
     `<div class="fr-budget-bar"><span style="width:${progress}%"></span></div>`+
@@ -80,7 +81,14 @@ export function goalCard(goal,history=false) {
 }
 
 export function accountCard(account,balance) {
-  return link(account.name,'account',account.id,`<span class="fr-section-amount">${moneyLabel(balance)}${accountMark(account)}</span>`);
+  return `<button type="button" class="fr-typed-account fr-account-list-item" data-section-action="account" data-id="${esc(account.id)}">
+    <span class="fr-typed-account-name">${accountMark(account,false)}<strong>${esc(account.name)}</strong></span>
+    ${moneyLabel(balance)}</button>`;
+}
+
+export function ledgerRow(name,action,id,amount,meta='') {
+  return `<button type="button" class="fr-ledger-row" data-section-action="${action}" data-id="${esc(id)}">
+    <span class="fr-ledger-name">${esc(name)}</span>${moneyLabel(amount)}${meta}</button>`;
 }
 
 export function recordHistory(doc,operation) {

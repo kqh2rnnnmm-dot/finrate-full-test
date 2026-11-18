@@ -1,6 +1,7 @@
+import {editAmount,normalizedAmount,validAmount} from './amount-pad.mjs';
 import * as ledger from './ledger.mjs';
 import * as ui from './sections.mjs';
-import {heading, esc, amountText, dateText, operationRows, accountMark, categoryLabel} from './screens.mjs';
+import {heading, esc, amountText, dateText, operationRows, accountMark, categoryLabel, keypad, enteredMoney, icon, unsaved} from './screens.mjs';
 import {addAccount, addCategory, archive, money, rename, uid, fail} from './engine/model.mjs';
 import {saveOperation, cancelOperation, localDate} from './engine/operations.mjs';
 import {reconcileAccount, restoreAccount, categoryAction, setAccountPolicy, transferPreview} from './engine/block02.mjs';
@@ -66,8 +67,6 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   const remember = () => {
     if (!state()) return;
     state().scroll = scroll()?.scrollTop || 0;
-    const credit = host.querySelector('[data-credit-summary]');
-    if(credit)state().creditCollapsed=!credit.open;
   };
   function enter(page, props={}) {
     remember();
@@ -75,11 +74,13 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     redraw();
   }
   function pop() {
-    stack.pop();
+    const closed=stack.pop();
+    if (closed?.returnTo) return closed.returnTo();
     if (stack.length) redraw();
     else exit();
   }
   function dirty(s) {
+    if (s.page==='transfer-amount') return s.buffer!==s.initial;
     if (s.page==='form') return JSON.stringify(s.values)!==s.initial;
     if (s.page==='batch-review') return s.items.some(item=>item.reviewed);
     if (s.page==='transfer-accounts') return JSON.stringify(s.draft)!==s.initial;
@@ -137,6 +138,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const valid = parsed && total<=10000;
     host.querySelector('[data-share-total]').textContent = total===null ? '—' : total/100+'%';
     host.querySelector('[data-share-free]').textContent = total===null?'': 'Свободно '+Math.max(0,10000-total)/100+'%';
+    const room=host.querySelector('[data-share-room]');
+    if(room)room.textContent=parsed?'Для категории доступно '+Math.max(0,10000-total+(parsed[s.single]||0))/100+'%':'';
     host.querySelector('[data-share-bar]').style.width = (total===null?0:Math.min(10000,total)/100)+'%';
     host.querySelector('[data-share-error]').textContent = valid?'':errors.MONTH_PERCENT_TOTAL;
     host.querySelector('[data-action=section-save-share]').disabled = busy || !valid;
@@ -163,10 +166,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       {name:category?.name || (parentId?'':state().query||'')}, (v)=>commit(category?'category.rename':'category.add',
         d=>category?categoryAction(d,id,'rename',{name:v.name.trim()}):addCategory(d,{id,name:v.name.trim(),type:kind,parentId})));
   }
-  function newAccount() {
+  function newAccount(options={}) {
     const id = uid();
     form('Новый счёт',[
-      choices('kind','Тип счёта',[['bank','Безнал'],['cash','Наличные'],['credit','Кредитная карта']]),
+      choices('kind','Тип счёта',[['bank','Безнал'],['cash','Наличные'],...(options.kind==='income'?[]:[['credit','Кредитная карта']])]),
       text('name','Название'),number('opening','Начальный остаток',false),day('openingDue','Срок начального долга',false),number('limit','Кредитный лимит',false),
       choices('mode','Срок покупок',[['months','До конца месяца'],['days','Дней после покупки'],['statement','По выписке']]),
       number('days','Количество дней',false)
@@ -177,7 +180,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       if(openingLots&&!v.openingDue)fail('CREDIT_DUE');
       addAccount(d,{id,name:v.name,kind:credit?'bank':v.kind,financeType:credit?'credit':'debit',opening,
         ...(credit?{credit:{limit:asAmount(v.limit),grace:grace(v),...(openingLots?{openingLots}:{})}}:{})});
-    },()=>{pop();enter('account',{id});}),{dynamic:'account'});
+    },()=>{
+      if(options.created){stack.pop();return options.created(id);}
+      pop();enter('account',{id});
+    }),{dynamic:'account',returnTo:options.exit});
   }
   function grace(v) {
     if (v.mode==='statement') return {mode:v.mode};
@@ -205,10 +211,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       title:repay?'Погашение':'Перевод'});
   }
   function transferAmount(s,done) {
-    return form(s.title,[number('amount','Сумма')],{amount:s.draft.amount},v=>{
-      asAmount(v.amount);s.draft.amount=v.amount;
-      done();
-    },{submitLabel:'Далее'});
+    const buffer=s.draft.amount.replace('.',',');
+    enter('transfer-amount',{title:s.title,buffer,initial:buffer,owner:s,done});
   }
   function saveTransfer(s) {
     return commit(s.operation?'transfer.edit':'transfer.add',d=>{
@@ -223,8 +227,13 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
 
   function transferRow(label,action,id,after=null) {
     const a=currentAccount(id);
-    return ui.link(label,action,'',a?`<span class="fr-transfer-account-detail"><strong data-full-name>${esc(a.name)}</strong>
-      ${accountMark(a)}${ui.small((after===null?'':label==='Откуда'?'Останется ':'Будет ')+amountText(after??ledger.fact().balances[id]))}</span>`:ui.small('Выбрать'));
+    const balance=a ? (after??ledger.fact().balances[id]) : 0;
+    const hint=after===null?'':label==='Откуда'?'Останется ':'Будет ';
+    return `<section class="fr-transfer-field"><h2>${label}</h2>
+      <button class="fr-transfer-choice" type="button" data-section-action="${action}">
+      <span class="fr-transfer-choice-copy"><strong data-full-name>${esc(a?.name||'Выбрать счёт')}</strong>
+      ${a?accountMark(a)+`<span class="fr-transfer-balance">${hint}${amountText(balance)}</span>`:''}</span>
+      ${icon(after===null?'down':'pencil')}</button></section>`;
   }
 
   function goalForm(goal) {
@@ -364,8 +373,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           ui.link('Накопления','savings'));
       }
       case 'budget-settings': {
-        const p=budget.budgetPreferences(d);
+        const p=budget.budgetPreferences(d), overview=budget.monthlyOverview(d,s.month||todayMonth());
         return list('Настройки сводки',ui.panel(
+          ui.link('Можно тратить','money','',ui.moneyLabel(overview.available))+
+          ui.link('План доходов','income-plans','',ui.moneyLabel(overview.expected))+
           ui.link('Распределение плана','distribution')+ui.link('Шаг ползунка','slider-step','',ui.small(p.step+'%'))+
           ui.link('Исключать накопления','toggle-savings','',ui.small(p.excludeSavings?'Да':'Нет'))
         )+(s.error?ui.empty(s.error):''));
@@ -422,7 +433,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
             accounts.map(a=>ui.accountCard(a,balances[a.id])).join('')}</section>`:'';
         }).join('');
         return heading('Счета и кошельки')+ui.tabs([['active','Действующие'],['archive','Архив']],active?'active':'archive')+
-          ui.body(rows||ui.empty('Архив пуст.'))+
+          ui.body(rows||ui.empty(active?'Счетов пока нет.':'Архив пуст.'))+
           (active?'<button type="button" class="fr-primary" data-section-action="account-new" aria-label="Новый счёт">Добавить счёт</button>':'');
       }
       case 'account': {
@@ -441,13 +452,14 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           return ui.panel(ui.small(dateText(r.at.slice(0,10)))+
             (r.before.name!==next.name?`<div class="fr-history-change"><del>${esc(r.before.name)}</del><strong>${esc(next.name)}</strong></div>`:'Условия счёта изменены'));
         }).reverse().join('')+operationList(d.operations.filter(o=>o.accountId===s.id||o.toAccountId===s.id)));
+      case 'transfer-amount': return keypad('',s.buffer,validAmount(s.buffer),false,s.title,'transfer-accept');
       case 'transfer-accounts': {
         const x=s.draft;
-        return heading(s.title)+ui.body(transferRow('Откуда','transfer-source',x.accountId)+
-          (!s.repay&&!s.own?`<button type="button" class="fr-transfer-swap" data-section-action="transfer-swap" aria-label="Поменять счета местами"
-             ${x.accountId&&x.toAccountId?'':'disabled'}>⇅</button>`:'')+
+        return heading(s.title)+ui.body('<div class="fr-transfer-accounts-body">'+transferRow('Откуда','transfer-source',x.accountId)+
+          (!s.repay&&!s.own?`<div class="fr-transfer-direction"><button type="button" class="fr-transfer-swap" data-section-action="transfer-swap" aria-label="Поменять счета местами"
+             ${x.accountId&&x.toAccountId?'':'disabled'}>${icon('swap')}</button></div>`:'')+
           (s.repay?ui.pair(accountName(x.toAccountId),creditSummary(d,x.toAccountId,date()).debt):
-            transferRow('Куда','transfer-target',x.toAccountId)))+
+            transferRow('Куда','transfer-target',x.toAccountId))+'</div>')+
           `<button type="button" class="fr-primary" data-section-action="transfer-next" ${x.accountId&&x.toAccountId?'':'disabled'}>Далее</button>`;
       }
       case 'transfer-picker': {
@@ -491,15 +503,18 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         return list('Ожидания этого плана',ui.actionButton('Сохранить ожидания','income-stop-keep')+
           ui.actionButton('Закрыть ожидания','income-stop-close')+(s.error?ui.empty(s.error):''));
       case 'income-plans': {
-        const plans=(d.planning?.incomes || []).filter(p=>!p.archived);
-        const rows=income.incomeOccurrences(d,s.month+'-01',budget.monthEnd(s.month)).filter(o=>o.date<=date());
-        return list('Планы доходов',ui.link('Распределение плана','distribution')+
-          rows.map(r=>ui.link(r.name,'income-occurrence',r.id,ui.small(dateText(r.date)+' · '+amountText(r.remaining)))).join('')+
-          plans.map(p=>ui.link(p.name,'income-source',p.id,ui.small(amountText(p.amount)))).join('')+
-          ui.link('Архив планов','income-archive'),ui.plus('income-new','Новый план дохода'),ui.monthControl(s.month));
+        const archived=s.tab==='archive';
+        const plans=(d.planning?.incomes||[]).filter(p=>p.archived===archived&&!p.deletedAt);
+        const rows=archived?[]:income.incomeOccurrences(d,s.month+'-01',budget.monthEnd(s.month)).filter(o=>o.date<=date());
+        const entries=plans.map(p=>ui.ledgerRow(p.name,'income-source',p.id,p.amount,ui.small(incomeSchedule(p)))).join('');
+        const expected=!archived&&(rows.length||d.planning?.incomes.length)?`<section class="fr-income-occurrences"><h2>Ожидаемые поступления</h2>
+          ${ui.monthControl(s.month)}${rows.map(r=>ui.ledgerRow(r.name,'income-occurrence',r.id,r.remaining,ui.small(dateText(r.date)))).join('')||
+          ui.empty('Ожидаемых поступлений пока нет.')}</section>`:'';
+        return heading('Планы доходов','',archived?'':ui.plus('income-new','Новый план дохода'))+
+          ui.tabs([['active','Действующие'],['archive','Архив']],archived?'archive':'active')+
+          ui.body((entries||ui.empty(archived?'Архив пуст.':'Планов доходов пока нет.'))+expected)+
+          (archived?'':'<button type="button" class="fr-primary" data-section-action="distribution">Распределение плана</button>');
       }
-      case 'income-archive': return list('Архив планов',(d.planning?.incomes || []).filter(p=>p.archived&&!p.deletedAt)
-        .map(p=>ui.link(p.name,'income-source',p.id)).join('')||ui.empty('Архив пуст.'));
       case 'income-source': {
         const p=d.planning.incomes.find(p=>p.id===s.id);
         return list(p.name,ui.panel(ui.pair('План',p.amount)+ui.small(RECURRENCES[p.repeat]||p.repeat))+
@@ -553,10 +568,20 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           (o.cancelled?'':ui.actionButton('Изменить','payment-fact-edit')+ui.actionButton('Отменить запись оплаты','payment-fact-cancel')));
       }
       case 'form': return ui.formScreen({...s,busy,fields:visibleFields(s)});
-      case 'discard': return heading('Выйти без сохранения?')+`<div class="fr-unsaved-content"><p class="fr-unsaved-message">Изменения не будут сохранены.</p><div class="fr-unsaved-actions">${ui.actionButton('Вернуться к редактированию','resume')}${ui.actionButton('Выйти без сохранения','discard')}</div></div>`;
+      case 'discard': return unsaved('data-section-action','resume','discard');
       case 'confirm': return list(s.title,ui.panel(`<p>${esc(s.message)}</p>`)+ui.actionButton(s.submitLabel,'confirm')+
         (s.error?ui.empty(s.error):''));
     }
+  }
+
+  function incomeSchedule(plan) {
+    const schedule=plan.schedules?.at(-1);
+    const frequency=RECURRENCES[plan.repeat]||({once:'Разово','salary-split':'Аванс и остаток'})[plan.repeat]||plan.repeat;
+    if(!schedule)return frequency;
+    if(plan.repeat==='monthly')return frequency+' · '+schedule.day+' числа';
+    if(plan.repeat==='weekly')return frequency+' · '+['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'][schedule.weekday];
+    if(plan.repeat==='yearly')return frequency+' · '+schedule.day+'.'+String(schedule.month).padStart(2,'0');
+    return frequency;
   }
 
   function renderCredit(s,a,credit) {
@@ -566,15 +591,20 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       ui.actionButton('Записать покупку','credit-purchase')+ui.actionButton('Условия кредитной карты','credit-settings')+
       ui.actionButton('Переименовать','account-rename')+(credit.own?ui.actionButton('Перевести собственные средства','account-transfer'):'')+
       ui.actionButton('Архивировать','account-archive')}${ui.link('История счёта','account-history',a.id)}</div>`:'';
-    const due=ui.panel((credit.due===null?ui.small('Укажите сумму по выписке'):ui.pair('К оплате до '+dateText(credit.dueDate),credit.due))+
-      (credit.overdue?ui.pair('Просрочено',credit.overdue):'')+credit.lots.filter(l=>l.due).map(l=>ui.pair(dateText(l.due),l.amount)).join(''))+
+    const byDate=new Map();
+    for(const lot of credit.lots)if(lot.due)byDate.set(lot.due,(byDate.get(lot.due)||0)+lot.amount);
+    const due=[...byDate].sort(([a],[b])=>a.localeCompare(b)).map(([day,amount])=>
+      `<div class="fr-credit-due-row">${ui.pair('До '+dateText(day),amount)}${day<date()?'<span class="fr-overdue">Просрочено</span>':''}</div>`).join('')+
+      (credit.unknown?ui.pair('Без срока',credit.unknown):'')+
+      (credit.statementCurrent?ui.pair('По выписке до '+dateText(credit.dueDate),credit.due):'')+
+      (credit.debt?'':ui.empty('Долга нет.'))+
       (a.archived?'':ui.actionButton('Указать сумму по выписке','credit-statement'));
-    return heading(a.name,'',controls)+`<div class="fr-credit-type">${accountMark(a)}${a.archived?ui.small('В архиве'):''}</div>`+
+    return heading(a.name,'',controls,true)+`<div class="fr-credit-type">${accountMark(a)}${a.archived?ui.small('В архиве'):''}</div>`+
       ui.body(`<div class="fr-credit-expandable" data-credit-folded="${!!s.creditFolded}"><div>
-      <details class="fr-credit-figures" data-credit-summary ${s.creditCollapsed?'':'open'}>
-      <summary>${ui.small('Долг')}${ui.moneyLabel(credit.debt)}</summary>
-      ${ui.pair('Кредитный лимит',credit.limit)+ui.pair('Доступно из лимита',credit.available)+
-        ui.pair('Собственные средства',credit.own)}</details></div></div>`+
+      <section class="fr-credit-figures">
+      ${ui.small('Долг')}<button type="button" class="fr-credit-main-debt" data-section-action="credit-repay" aria-label="Погасить весь долг" ${credit.debt&&!a.archived?'':'disabled'}>${amountText(credit.debt)}</button>
+      <div class="fr-credit-values">${ui.pair('Кредитный лимит',credit.limit)+ui.pair('Доступно из лимита',credit.available)+
+        ui.pair('Собственные средства',credit.own)}</div></section></div></div>`+
         ui.tabs([['due','Сроки'],['records','Операции']],tab)+
         (tab==='due'?due:operationList(d.operations.filter(o=>o.accountId===a.id||o.toAccountId===a.id))))+
       menu+(a.archived?'':`<div class="fr-credit-repay"><button type="button" class="fr-primary" data-section-action="credit-repay"
@@ -593,8 +623,14 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       const children=doc().categories.filter(child=>child.parentId===c.id&&!child.archived&&
         (c.name.toLocaleLowerCase('ru').includes(q)||child.name.toLocaleLowerCase('ru').includes(q)))
         .sort((a,b)=>a.name.localeCompare(b.name,'ru'));
-      return `<div class="fr-category-group-row">${ui.link(c.name,'category',c.id,b?ui.small(amountText(b.plan)):'')}
-        ${b?ui.small(b.bps/100+'%'):''}${q?children.map(child=>ui.link(child.name,'category',child.id)).join(''):''}</div>`;
+      const open=q||s.expanded?.includes(c.id);
+      return `<div class="fr-category-group-row"><div class="fr-category-group-heading">
+        <button type="button" class="fr-category-group-main" data-section-action="category" data-id="${esc(c.id)}">
+        <strong data-full-name>${esc(c.name)}</strong>${b?`<span class="fr-category-metrics">${ui.small(b.bps/100+'%')}${ui.moneyLabel(b.plan)}</span>`:''}</button>
+        <button type="button" class="fr-category-fold" data-section-action="category-fold" data-id="${esc(c.id)}"
+          aria-label="Подкатегории: ${esc(c.name)}" aria-expanded="${!!open}">${icon('down')}</button></div>
+        ${open?`<div class="fr-category-children">${children.map(child=>ui.link(child.name,'category',child.id)).join('')}
+          ${ui.link('Добавить подкатегорию','category-add-child',c.id)}</div>`:''}</div>`;
     }).join('')||(q?ui.link('Создать «'+s.query.trim()+'»','category-new'):ui.empty('Категорий пока нет.'));
 
   }
@@ -608,11 +644,11 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       const plans=(d.payments?.plans||[]).slice().sort((a,b)=>a.versions.at(-1).name.localeCompare(b.versions.at(-1).name,'ru'));
       if(s.calendar){
         content=occurrences.filter(r=>!chosenDay||r.date===chosenDay).sort((a,b)=>a.name.localeCompare(b.name,'ru')).map(r=>
-          ui.link(r.name,'payment-detail',r.id,ui.small(amountText(r.amount)+' · '+dateText(r.date)))).join('');
+          ui.ledgerRow(r.name,'payment-detail',r.id,r.amount,ui.small(dateText(r.date)))).join('');
       }else{
         const rows=(paused)=>plans.filter(p=>p.pauses.some(v=>!v.to)===paused).map(p=>{
           const v=p.versions.filter(v=>v.from<=to).at(-1)||p.versions[0];
-          return ui.link(v.name,'payment-plan',p.id,ui.small(amountText(v.amount)));
+          return ui.ledgerRow(v.name,'payment-plan',p.id,v.amount,ui.small(dateText(v.start)));
         }).join('');
         const paused=rows(true);
         content=rows(false)+(paused?ui.panel('<h2 class="fr-section-title">Приостановленные</h2>'+paused):'');
@@ -625,12 +661,13 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         group.sum+=o.amount;
         groups.set(r.id,group);
       }
-      content=[...groups.values()].map(({r,sum,date:paid})=>ui.link(r.name,'payment-detail',r.id,ui.small(amountText(sum)+' · '+dateText(paid)))).join('');
+      content=[...groups.values()].map(({r,sum,date:paid})=>ui.ledgerRow(r.name,'payment-detail',r.id,sum,ui.small(dateText(paid)))).join('');
     } else {
       const due=payments.paymentDue(d,s.month,date()).filter(r=>s.month>=todayMonth()||r.date>=from);
       content=due.map(r=>`<div class="fr-due-row">${s.selecting?`<input type="checkbox" data-batch="${esc(r.id)}" aria-label="${esc(r.name)}" ${s.selected.includes(r.id)?'checked':''}>`:''}${
-        ui.link(r.name,'payment-detail',r.id,ui.small(amountText(r.remaining)+' · '+dateText(r.date)))
-      }${r.overdue?'<span class="fr-overdue">Просрочено</span>':''}</div>`).join('');
+        ui.ledgerRow(r.name,'payment-detail',r.id,r.remaining,`<span class="fr-payment-meta">${ui.small(dateText(r.date))}
+        ${r.overdue?'<span class="fr-overdue">Просрочено</span>':''}</span>`)
+      }</div>`).join('');
       if (s.selecting) content+=ui.actionButton('Оплатить выбранные','batch')+
         (s.selected.length===1?ui.actionButton('Изменить выбранный платёж','batch-edit'):'')+ui.actionButton('Снять выбор','batch-exit');
     }
@@ -640,12 +677,13 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       const day=from.slice(0,8)+String(i+1).padStart(2,'0');
       return `<button type="button" data-section-action="payment-day" data-id="${day}" aria-pressed="${chosenDay===day}" ${days.has(day)?'data-marked':''}>${i+1}</button>`;
     }).join('')}</div>` : '';
-    return heading('Платежи','',ui.plus('payment-new','Новый платёж'))+ui.monthControl(s.month)+calendar+
-      ui.body(`<div class="${s.tab==='planned'?'fr-planned-payments':''}">${content||ui.empty('Платежей пока нет.')}</div>`)+
+    return `<div class="fr-payment-screen ${s.tab==='planned'?'fr-payment-screen--planned':''}">`+
+      heading('Платежи','',ui.plus('payment-new','Новый платёж'))+ui.monthControl(s.month)+calendar+
+      ui.body(content||ui.empty('Платежей пока нет.'))+
       `<div class="fr-payment-tab-island"><div class="fr-payment-tab-top">${ui.tabs([['planned','Запланированные']],s.tab)}
       ${s.tab==='planned'?`<button type="button" class="fr-calendar-toggle" data-section-action="payment-calendar"
         aria-label="${s.calendar?'Список':'Календарь'}">${s.calendar?'☰':ui.calendarIcon()}</button>`:''}</div>
-        ${ui.tabs([['due','К оплате'],['paid','Оплаченные']],s.tab)}</div>`;
+        ${ui.tabs([['due','К оплате'],['paid','Оплаченные']],s.tab)}</div></div>`;
   }
 
   function visibleFields(s) {
@@ -674,7 +712,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'discard': stack.pop();return pop();
       case 'confirm': return commit(s.action,s.fn,s.done||pop);
       case 'received': return enter('received',{month:s.month});
-      case 'budget-settings': return enter('budget-settings');
+      case 'budget-settings': return enter('budget-settings',{month:s.month||todayMonth()});
       case 'money': return enter('money');
       case 'savings': return enter('savings');
       case 'distribution': return openShare();
@@ -686,6 +724,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         d=>budget.setBudgetPreference(d,'excludeSavings',!budget.budgetPreferences(d).excludeSavings),redraw);
       case 'category': case 'category-ops': return enter(name,{id});
       case 'category-new': return categoryForm();
+      case 'category-add-child': return categoryForm(id,s.tab);
+      case 'category-fold':
+        s.expanded=s.expanded?.includes(id)?s.expanded.filter(item=>item!==id):[...(s.expanded||[]),id];
+        remember();return redraw();
       case 'subcategory-new': return categoryForm(s.id,currentCategory(s.id).type);
       case 'category-rename': {const c=currentCategory(s.id);return categoryForm(c.parentId,c.type,c);}
       case 'context-operation': {
@@ -739,6 +781,12 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         return redraw();
       }
       case 'transfer-edit-amount': return transferAmount(s,pop);
+      case 'transfer-accept':
+        if(validAmount(s.buffer)){
+          s.owner.draft.amount=normalizedAmount(s.buffer);
+          return s.done();
+        }
+        return;
       case 'transfer-edit-date': return form('Дата перевода',[day('date','Дата')],s.draft,v=>{s.draft.date=v.date;pop();});
       case 'transfer-save': return saveTransfer(s);
       case 'transfer-edit': {
@@ -747,10 +795,9 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'transfer-cancel': return confirm('Отменить перевод?', 'Остатки счетов будут пересчитаны.', 'Отменить перевод',
         'transfer.cancel',d=>cancelOperation(d,s.id),()=>{stack.pop();pop();});
       case 'normal-income': return startOperation('income');
-      case 'income-plans': return enter(name,{month:todayMonth()});
+      case 'income-plans': return enter(name,{month:s.month||todayMonth(),tab:'active'});
       case 'income-receipt-part': case 'income-receipt-full': return s.onChoice(name==='income-receipt-full');
       case 'income-new': return incomeForm();
-      case 'income-archive': return enter(name);
       case 'income-source': case 'income-occurrence': return enter(name,{id,month:s.month});
       case 'income-edit': return incomeForm(doc().planning.incomes.find(p=>p.id===s.id));
       case 'income-stop': return enter('income-stop-choice',{id:s.id});
@@ -959,6 +1006,18 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       else {remember();openOperation(id);}
     },
     hasDueIncome:()=>pendingIncome().length>0,
+    newAccount,
+    busy:()=>busy,
+    dirty:()=>stack.some(dirty),
+    key(key) {
+      const s=state();
+      if(s?.page!=='transfer-amount')return;
+      s.buffer=editAmount(s.buffer,key);
+      const output=host.querySelector('output');
+      output.textContent=enteredMoney(s.buffer);
+      output.classList.toggle('fr-empty',!s.buffer);
+      host.querySelector('[data-action=transfer-accept]').disabled=!validAmount(s.buffer);
+    },
     render, back, action, remember,
     restore() {
       if (scroll()) scroll().scrollTop=state().scroll;

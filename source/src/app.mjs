@@ -1,3 +1,5 @@
+import {editAmount,normalizedAmount,validAmount} from './amount-pad.mjs';
+import {bindUpdate} from './update.mjs';
 import * as ledger from './ledger.mjs';
 import {createSections} from './section-controller.mjs';
 import {recordHistory, recordRows, field} from './sections.mjs';
@@ -50,8 +52,6 @@ function selectRecord(id) {
   return openRecord(id);
 }
 const isDirty=()=>JSON.stringify(draft)!==initial;
-const validAmount=()=>/^\d{1,9}(,\d{0,2})?$/.test(buffer)&&Number(buffer.replace(',','.'))>0;
-const normalizedAmount=value=>value.endsWith(',')?value.slice(0,-1):value;
 function start(kind,context={}){
   resetDraft();
   origin=route;originScroll=listNode()?.scrollTop||0;
@@ -189,16 +189,12 @@ function edit(field){
 }
 
 function enterKey(key){
-  if(key==='backspace')buffer=buffer.slice(0,-1);
-  if(key===','&&!buffer.includes(','))buffer=(buffer||'0')+',';
-  if(/^\d$/.test(key)){
-    const candidate=buffer==='0'?key:buffer+key;
-    if(/^\d{1,9}(,\d{0,2})?$/.test(candidate))buffer=candidate;
-  }
+  if(route==='section')return sections.key(key);
+  buffer=editAmount(buffer,key);
   const output=host.querySelector('output');
   output.textContent=screen.enteredMoney(buffer);
   output.classList.toggle('fr-empty',!buffer);
-  host.querySelector('[data-action=next]').disabled=!validAmount();
+  host.querySelector('[data-action=next]').disabled=!validAmount(buffer);
 }
 
 async function save(){
@@ -256,10 +252,16 @@ function action(id){
       operationFilters={...pendingFilters};filterScroll=0;return returnToOperations();
     case 'filter-category':
       filterQuery='';return move('filter-picker');
-    case 'section-save-share': return sections.action(id);
+    case 'section-save-share': case 'transfer-accept': return sections.action(id);
+    case 'first-account':
+      return sections.newAccount({
+        kind:draft.kind,
+        exit:()=>move('account'),
+        created:id=>chooseAccount(id)
+      });
     case 'income-plans-shortcut': return openSection('income-plans');
     case 'next':
-      if(!validAmount())return;
+      if(!validAmount(buffer))return;
       draft.amount=normalizedAmount(buffer);
       if(editing)return showReview();
       return openCategory();
@@ -284,12 +286,13 @@ function render(){
   const oldMenu=host.querySelector('#fr-menu-panel');
   if(oldMenu)menuScroll=oldMenu.scrollTop;
   updateMenu(route);
+  root.dataset.route=route;
   let markup;
   switch(route){
     case 'home': markup=screen.home();break;
     case 'menu': markup=screen.menu(menuGroup);break;
     case 'amount':
-      markup=screen.keypad(draft.kind,buffer,validAmount(),draft.kind==='income'&&!editing&&origin==='home');
+      markup=screen.keypad(draft.kind,buffer,validAmount(buffer),draft.kind==='income'&&!editing&&origin==='home');
       break;
     case 'category': markup=screen.categoryPicker(doc(),draft,query,showCreate,categoryRoot);break;
     case 'category-new':
@@ -429,14 +432,20 @@ host.addEventListener('touchend',event=>{
 document.addEventListener('keydown',event=>{
   if(!doc())return;
   if(event.key==='Escape'){event.preventDefault();return back();}
-  if(route!=='amount'||event.metaKey||event.ctrlKey||event.altKey||event.target.matches('input,textarea'))return;
+  if(!['amount','section'].includes(route)||!host.querySelector('.fr-keypad')||event.metaKey||event.ctrlKey||event.altKey||event.target.matches('input,textarea'))return;
   if(/^\d$/.test(event.key)||[',','.','Backspace'].includes(event.key)){
     event.preventDefault();enterKey(event.key==='Backspace'?'backspace':event.key==='.'?',':event.key);
   }
 });
 ledger.boot().then(()=>{
   render();
-  if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  bindUpdate(root,apply=>{
+    if(busy||sections.busy()||route==='unsaved')return;
+    const activeDraft=draft&&(isDirty()||route==='amount'&&buffer!==draft.amount||
+      route==='note'&&note!==draft.note||route==='category-new'&&categoryForm.name!==categoryForm.initial);
+    if(activeDraft||sections.dirty())getLeave(apply);
+    else apply();
+  });
 }).catch(()=>{
   host.innerHTML='<p class="fr-body" role="alert">Тестовое хранилище недоступно. Откройте приложение в обычной вкладке Safari и обновите страницу.</p>';
 });

@@ -3,11 +3,12 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import binary from '@sparticuz/chromium';
+import {scope,serveFixture,fixture} from './fixture-server.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.webmanifest':'application/manifest+json','.png':'image/png'};
-const scope='/finrate-full-test/';
 const server=createServer(async(req,res)=>{
   const location=new URL(req.url,'http://localhost').pathname;
+  if(serveFixture(location,res))return;
   if(!location.startsWith(scope))return res.writeHead(404).end();
   const name=location.slice(scope.length)||'index.html';
   if(!/^[a-z0-9-]+\.(html|js|css|webmanifest|png)$/.test(name))return res.writeHead(404).end();
@@ -27,6 +28,7 @@ try{
     const errors=[];
     page.on('pageerror',error=>errors.push(error.message));
     page.setDefaultTimeout(6000);
+    await fixture(page,url,'regression');
     await page.goto(url);
     const button=name=>page.getByRole('button',{name,exact:true});
     const title=name=>page.getByRole('heading',{name,exact:true}).waitFor();
