@@ -1,25 +1,15 @@
 {
-  "id": "./",
-  "name": "FinRate Full — тестовая сборка",
-  "short_name": "FinRate Test",
-  "lang": "ru",
+  "id": "full-restart",
+  "name": "FinRate Full Test",
+  "short_name": "FinRate Full",
   "start_url": "./",
   "scope": "./",
+  "lang": "ru",
   "display": "standalone",
   "background_color": "#f2f2f5",
   "theme_color": "#f2f2f5",
   "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    }
+    {"src":"icon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"icon-512.png","sizes":"512x512","type":"image/png"}
   ]
 }
