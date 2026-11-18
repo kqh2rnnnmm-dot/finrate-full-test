@@ -93,7 +93,7 @@ try{
     await button('Сводка').waitFor();
 
     await button('Сводка').click();
-    assert.match(await page.locator('.np-row').first().innerText(),/37,5/);
+    assert.match(await page.locator('.fr-amount-overview').innerText(),/37,5/);
     await page.locator('[data-section-action=received]').click();
     assert.equal(await page.locator('[data-operation]').count(),1);
     assert.match(await page.locator('[data-operation]').innerText(),/Аванс/);
@@ -121,7 +121,7 @@ try{
     await back();
     await button('Закрыть меню').click();
     await button('Сводка').click();
-    assert.match(await page.locator('.np-row').first().innerText(),/50/);
+    assert.match(await page.locator('.fr-amount-overview').innerText(),/50/);
 
     const existing=await page.evaluate(async()=> (await indexedDB.databases()).map(db=>db.name).sort());
     assert.deepEqual(existing,['finrate-full-test-restart-v1']);

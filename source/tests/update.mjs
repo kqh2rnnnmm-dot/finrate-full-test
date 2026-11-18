@@ -8,7 +8,7 @@ import {chromium} from 'playwright';
 import binary from '@sparticuz/chromium';
 import {scope,serveFixture,fixture} from './fixture-server.mjs';
 
-const baseline='0097d580584a6456f9ec9453d613bb17a420bbd2';
+const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819'};
 const work=await mkdtemp(join(tmpdir(),'finrate-update-'));
 const results=process.env.FINRATE_UPDATE_SCREENSHOTS || 'verification/visual-patch';
 const readBuild=async path=>JSON.parse((await readFile(join(path,'sw.js'),'utf8')).match(/const build = (.*);/)[1]);
@@ -33,8 +33,9 @@ const server=createServer(async(req,res)=>{
   if(!path.startsWith(scope)||!/^[a-z0-9-]+\.(html|js|css|png|webmanifest)$/.test(name))return res.writeHead(404).end();
   try{
     if(incomplete&&name==='styles-'+B.id+'.css')return res.writeHead(503).end();
-    if(served==='legacy'&&!oldBytes.has(name))oldBytes.set(name,execFileSync('git',['show',baseline+':'+name],{stdio:['ignore','pipe','ignore']}));
-    const data=served==='legacy'?oldBytes.get(name):await readFile(join(served==='A'?'site':join(work,'site'),name));
+    const revision=oldReleases[served],key=served+'/'+name;
+    if(revision&&!oldBytes.has(key))oldBytes.set(key,execFileSync('git',['show',revision+':'+name],{stdio:['ignore','pipe','ignore']}));
+    const data=revision?oldBytes.get(key):await readFile(join(served==='A'?'site':join(work,'site'),name));
     res.writeHead(200,{'Content-Type':mime[name.split('.').at(-1)],'Cache-Control':'no-store'}).end(data);
   }catch{res.writeHead(404).end();}
 });
@@ -173,6 +174,27 @@ try{
   assert.deepEqual(after.operations.map(o=>o.amount),[3200,500]);
   await context.close();
   console.log('PASS V11 and V12: empty vault, first account/category/operation, failed install, same release, two tabs, draft, restart, offline, stale write');
+
+  served='published';
+  const upgrade=await browser.newContext(options);
+  const published=await upgrade.newPage();
+  await fixture(published,url,'regression');
+  await published.goto(url);
+  await ready(published);
+  await record(published,41,'Аванс','Копилка');
+  await button(published,'Сводка').waitFor();
+  const existing=await fixture(published,url);
+  await published.goto(url);
+  served='A';
+  await update(published);
+  await published.getByText('Доступна версия '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
+  assert.equal(await root(published).getAttribute('data-release'),'0.2.0-test.2');
+  await button(published,'Обновить').click();
+  await published.getByText('Обновлено до '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
+  await coherent(published,A);
+  assert.deepEqual(await fixture(published,url),existing);
+  await upgrade.close();
+  console.log('PASS published 8fd14ef: manual update preserves accounts, categories, and own operation');
 
   for(const ownData of [false,true]){
     served='legacy';

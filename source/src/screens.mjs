@@ -31,16 +31,16 @@ export const home=()=>`<div class="fr-home-header"><div class="fr-brand">FinRate
 </div></main>`;
 
 const groups=[
-  ['Учёт',[['Операции','operations'],['Перевод','transfer'],['Счета и кошельки','accounts'],['Категории','categories'],['Долги']]],
-  ['Планы и отчёты',[['Платежи','payments'],['Планы доходов','income-plans'],['Распределение плана','distribution'],['Цели','savings'],['Лимиты'],['Отчёты']]],
-  ['Настройки и помощь',[['Настройки','budget-settings'],['Данные и синхронизация'],['История изменений'],['Инструкция и FAQ']]]
+  ['Учёт',[['Операции','operations'],['Перевод','transfer'],['Счета и кошельки','accounts'],['Категории','categories']]],
+  ['Планы и отчёты',[['Платежи','payments'],['Планы доходов','income-plans'],['Накопления','savings']]],
+  ['Настройки и помощь',[['Настройки сводки','budget-settings']]]
 ];
 export function menu(open) {
-  return heading('Меню')+`<nav id="fr-menu-panel" class="fr-menu-list" aria-label="Разделы FinRate">${groups.map(([title,items])=>`<details class="fr-menu-accordion" data-menu-group="${esc(title)}" ${open===title?'open':''}><summary>${esc(title)}<span class="fr-fold" aria-hidden="true"></span></summary><div class="fr-menu-children">${items.map(([label,action])=>`<button type="button" class="fr-menu-item" ${action?'data-action="'+action+'"':'disabled'}>${label}</button>`).join('')}</div></details>`).join('')}</nav>`;
+  return heading('Меню')+`<nav id="fr-menu-panel" class="fr-menu-list" aria-label="Разделы FinRate">${groups.map(([title,items])=>`<details class="fr-menu-accordion" data-menu-group="${esc(title)}" ${open===title?'open':''}><summary>${esc(title)}<span class="fr-fold" aria-hidden="true"></span></summary><div class="fr-menu-children">${items.map(([label,action])=>`<button type="button" class="fr-menu-item" data-action="${action}">${label}</button>`).join('')}</div></details>`).join('')}</nav>`;
 }
 
-export function keypad(kind,buffer,valid,plans=false,title=labels[kind],next='next') {
-  return heading(title,kind)+`<div class="fr-amount-display"><output class="fr-money ${buffer?'':'fr-empty'}" aria-label="Сумма" aria-live="polite">${esc(enteredMoney(buffer))}</output></div><div class="fr-keypad" role="group" aria-label="Ввод суммы">${['1','2','3','4','5','6','7','8','9',',','0','backspace'].map(key=>`<button type="button" class="fr-key" data-key="${key}" aria-label="${key==='backspace'?'Удалить цифру':key===','?'Запятая':key}">${key==='backspace'?'⌫':key}</button>`).join('')}</div>`+ (plans?'<button type="button" class="fr-keypad-shortcut" data-action="income-plans-shortcut">Планы доходов</button>':'')+primary('Далее',next,valid?'':'disabled');
+export function keypad(kind,buffer,valid,title=labels[kind],next='next') {
+  return heading(title,kind)+`<div class="fr-amount-display"><output class="fr-money ${buffer?'':'fr-empty'}" aria-label="Сумма" aria-live="polite">${esc(enteredMoney(buffer))}</output></div><div class="fr-keypad" role="group" aria-label="Ввод суммы">${['1','2','3','4','5','6','7','8','9',',','0','backspace'].map(key=>`<button type="button" class="fr-key" data-key="${key}" aria-label="${key==='backspace'?'Удалить цифру':key===','?'Запятая':key}">${key==='backspace'?'⌫':key}</button>`).join('')}</div>`+primary('Далее',next,valid?'':'disabled');
 }
 export function enteredMoney(buffer){
   if(!buffer)return 'Сумма';
@@ -130,6 +130,7 @@ ${reviewRow('account','Выбрать счёт операции',account?esc(acc
 
 export const noteScreen=(text,readonly)=>heading('Заметка')+`<button class="fr-note-done" type="button" data-action="accept-note" ${text.length>500?'disabled':''}>Готово</button><textarea class="fr-note-textarea" aria-label="Текст заметки" ${readonly?'readonly':''}>${esc(text)}</textarea><div class="fr-note-count ${text.length>500?'fr-over-limit':''}">${text.length} / 500</div>`;
 
+const operationTypes={...labels,transfer:'Перевод',adjustment:'Корректировка',refund:'Возврат'};
 export function operationRows(doc,rows,query=''){
   const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ru').replaceAll('ё','е');
   const q=normalize(query).trim();
@@ -137,15 +138,20 @@ export function operationRows(doc,rows,query=''){
   let day;
   return rows.slice().reverse().sort((a,b)=>b.date.localeCompare(a.date)).map(o=>{
     const category=categoryLabel(doc,o.allocations[0]?.categoryId);
-    const name=o.kind==='transfer'?'Перевод':o.kind==='adjustment'?'Корректировка':category.name;
-    const parent=category.parent;
+    const type=operationTypes[o.kind]||'Операция';
     const account=doc.accounts.find(a=>a.id===o.accountId)?.name||'';
     const destination=doc.accounts.find(a=>a.id===o.toAccountId)?.name;
-    const haystack=normalize([name,parent,account,destination,o.note].filter(Boolean).join(' '));
+    const categoryName=o.allocations[0]?.categoryId ? [category.parent,category.name].filter(Boolean).join(' · ') : '';
+    const haystack=normalize([type,categoryName,account,destination,o.note].filter(Boolean).join(' '));
     if(!terms.every(term=>haystack.includes(term)))return '';
     const group=o.date!==day?`<p class="fr-operation-date">${dateText(o.date)}</p>`:'';
     day=o.date;
-    return group+`<button type="button" class="fr-operation-row ${o.cancelled?'fr-cancelled':o.kind}" data-operation="${esc(o.id)}"><span class="fr-operation-name">${esc(name)}</span><span class="fr-operation-amount">${o.kind==='income'?'+':o.kind==='expense'?'−':''}${amountText(o.amount)}</span><span class="fr-operation-account">${esc(parent||account)}${o.cancelled?' — отменена':''}</span></button>`;
+    const accountPath=destination?[account,destination].filter(Boolean).join(' → '):account;
+    return group+`<button type="button" class="fr-operation-row ${o.cancelled?'fr-cancelled':o.kind}" data-operation="${esc(o.id)}">
+      <span class="fr-operation-name">${type}</span><span class="fr-operation-amount">${o.kind==='income'?'+':o.kind==='expense'?'−':''}${amountText(o.amount)}</span>
+      ${categoryName?`<span class="fr-operation-category">${esc(categoryName)}</span>`:''}
+      ${accountPath?`<span class="fr-operation-account">${esc(accountPath)}</span>`:''}
+      ${o.cancelled?'<span class="fr-operation-status">Операция отменена</span>':''}</button>`;
   }).join('')||`<p class="fr-no-operations">${q?'Операции не найдены.':'Операций пока нет.'}</p>`;
 }
 

@@ -1,7 +1,7 @@
 import * as ledger from '../src/ledger.mjs';
 import {addAccount,addCategory} from '../src/engine/model.mjs';
-import {localDate,saveOperation} from '../src/engine/operations.mjs';
-import {saveIncome} from '../src/engine/planning.mjs';
+import {localDate,saveOperation,cancelOperation} from '../src/engine/operations.mjs';
+import {saveIncome,confirmPlannedIncome} from '../src/engine/planning.mjs';
 import {savePaymentPlan,confirmPayment,setPaymentPaused} from '../src/engine/scheduled-payments.mjs';
 import {saveShares,saveSavingsGoal,assignSavings} from '../src/engine/month-budget.mjs';
 
@@ -61,10 +61,25 @@ function visual(d) {
   setPaymentPaused(d,'utilities',true,today);
 }
 
+function audit(d) {
+  visual(d);
+  const date=localDate(),month=date.slice(0,7);
+  confirmPlannedIncome(d,'salary-plan:'+month,{id:'audit-partial',amount:2500000,date,today:date,accountId:'card',
+    allocations:[{categoryId:'salary-0',amount:2500000}]},{final:false});
+  addCategory(d,{id:'zz-long-expense',name:'Ярмарка и другие непредвиденные семейные расходы с длинным названием',type:'expense'});
+  addAccount(d,{id:'long-account',name:'Семейный счёт для поездок, покупок и долгосрочных расходов'});
+  addAccount(d,{id:'long-target',name:'Наличные на поездки и непредвиденные расходы семьи',kind:'cash'});
+  saveOperation(d,{id:'audit-cancelled',kind:'expense',date,accountId:'card',amount:1234500,
+    allocations:[{categoryId:'zz-long-expense',amount:1234500}],note:`Сценарий поиска и проверки короткого экрана.
+Вторая строка заметки.`});
+  cancelOperation(d,'audit-cancelled');
+}
+
 try{
   await ledger.boot();
   const mode=new URLSearchParams(location.search).get('mode');
-  if(mode==='regression'||mode==='visual')await ledger.mutate('test.fixture',mode==='visual'?visual:basic);
+  const seed={regression:basic,visual,audit}[mode];
+  if(seed)await ledger.mutate('test.fixture',seed);
   const d=ledger.document();
   document.body.textContent=JSON.stringify({
     datasetId:d.datasetId,revision:d.revision,accounts:d.accounts,categories:d.categories,operations:d.operations,events:d.events,
