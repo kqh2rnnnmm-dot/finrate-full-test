@@ -7,3 +7,5 @@
 Исходники и проверки находятся в `source/`. Статические файлы в корне собираются с относительными ссылками для GitHub Pages. Команда `npm run build` из каталога `source/` записывает результат в `source/site/`.
 
 [Матрица приёмки и команды проверки](source/ACCEPTANCE.md) · [Пары скриншотов](source/verification/README.md)
+
+[Визуальный патч 0.2.0-test.2, обновление и первый запуск](source/verification/VISUAL_PATCH.md)

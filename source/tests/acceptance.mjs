@@ -1,26 +1,22 @@
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import {createServer} from 'node:http';
 import {mkdir,readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import binary from '@sparticuz/chromium';
+import {scope,serveFixture,fixture} from './fixture-server.mjs';
 
 const reference=process.env.FINRATE_REFERENCES;
 const results=process.env.FINRATE_SCREENSHOTS || 'verification/screens';
-const base='d38d6e2326a4c3f2d938ac3e4b2d46507e101a7a';
-const scope='/finrate-full-test/';
 const mime={html:'text/html; charset=utf-8',js:'application/javascript',css:'text/css',png:'image/png',webmanifest:'application/manifest+json'};
-const baseline=new Map();
-let legacy=false;
 const server=createServer(async(req,res)=>{
   const path=new URL(req.url,'http://localhost').pathname;
+  if(serveFixture(path,res))return;
   const name=path.slice(scope.length)||'index.html';
   try {
     if(reference && path.startsWith('/reference/') && /^[A-Z_]+\.html$/.test(path.slice(11))){
       res.writeHead(200,{'Content-Type':mime.html}).end(await readFile(reference+'/'+path.slice(11)));
     } else if(path.startsWith(scope)&&/^[a-z0-9-]+\.(html|js|css|webmanifest|png)$/.test(name)){
-      if(legacy&&!baseline.has(name))baseline.set(name,execFileSync('git',['show',base+':'+name]));
-      const bytes=legacy?baseline.get(name):await readFile('site/'+name);
+      const bytes=await readFile('site/'+name);
       res.writeHead(200,{'Content-Type':mime[name.split('.').at(-1)],'Cache-Control':'no-cache'}).end(bytes);
     } else res.writeHead(404).end();
   } catch{res.writeHead(404).end();}
@@ -62,6 +58,7 @@ try{
     async function shot(name,target=page){
       await target.locator('.fr-app').screenshot({path:`${results}/${width}-${colorScheme}-${name}.png`,animations:'disabled'});
     }
+    await fixture(page,origin+scope,'regression');
     await page.goto(origin+scope);
     await button('Сводка').waitFor();
     await geometry();
@@ -217,8 +214,8 @@ try{
     await section('transfer-target').click();
     await section('transfer-pick','cash').click();
     await button('Далее').click();
-    await fill('amount','10,25');
-    await submit();
+    await page.keyboard.type('10,25');
+    await button('Далее').click();
     await button('Перевести').click();
     await title('Карта');
     await section('account-history').click();
@@ -258,8 +255,8 @@ try{
     await section('transfer-source').click();
     await section('transfer-pick','card').click();
     await button('Далее').click();
-    assert.equal(await page.locator('[name=amount]').inputValue(),'150');
-    await submit();
+    assert.match(await page.locator('output').innerText(),/150/);
+    await button('Далее').click();
     await button('Погасить').click();
     await title('Тестовая кредитная карта');
     assert.equal(await button('Погасить').isDisabled(),true);
@@ -374,10 +371,10 @@ try{
     await button('Сохранить ожидания').click();
     await button('Восстановить').waitFor();
     await back();
-    await section('income-archive').click();
+    await section('tab','archive').click();
     await section('income-source').click();
     await button('Восстановить').click();
-    await title('Архив планов');
+    await page.getByText('Архив пуст.',{exact:true}).waitFor();
     assert.equal(await section('income-source').count(),0);
     assert.deepEqual(errors,[]);
     console.log('PASS',width,colorScheme,'distribution, context, filters and history, savings, transfer, credit, payments, planned income');
@@ -429,64 +426,6 @@ try{
     function fillShare(name,value){return page.getByRole('textbox',{name:'Процент '+name,exact:true}).fill(value);}
   }
 
-  legacy=true;
-  const upgrade=await browser.newContext();
-  const page=await upgrade.newPage();
-  const button=name=>page.getByRole('button',{name,exact:true});
-  await page.goto(origin+scope);
-  await page.locator('[data-entry=income]').click();
-  await button('7').click();
-  await button('7').click();
-  await button('Далее').click();
-  await button('Аванс').click();
-  await button('Сегодня').click();
-  await page.locator('[data-account=cash]').click();
-  await button('Сохранить').click();
-  await button('Сводка').waitFor();
-  await page.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));
-  legacy=false;
-  await page.evaluate(async()=>{
-    const r=await navigator.serviceWorker.ready;
-    const previous=navigator.serviceWorker.controller;
-    if(!previous)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));
-    const changed=new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));
-    await r.update();
-    await Promise.race([changed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('service worker update timeout')),8000))]);
-  });
-  for(let i=0;i<2;i++){
-    await page.reload();
-    await button('Сводка').click();
-    await page.locator('[data-section-action=received]').click();
-    assert.equal(await page.locator('[data-operation]').count(),1);
-    assert.match(await page.locator('[data-operation]').innerText(),/77/);
-    await upgrade.setOffline(true);
-  }
-  await upgrade.setOffline(false);
-  const other=await upgrade.newPage();
-  await other.goto(origin+scope);
-  await other.getByRole('button',{name:'Сводка',exact:true}).waitFor();
-  await page.goto(origin+scope);
-  await page.getByRole('button',{name:'Сводка',exact:true}).waitFor();
-  async function recordIncome(tab,value){
-    await tab.locator('[data-entry=income]').click();
-    await tab.getByRole('button',{name:value,exact:true}).click();
-    for(const name of ['Далее','Аванс','Сегодня']){
-      await tab.getByRole('button',{name,exact:true}).click();
-    }
-    await tab.locator('[data-account=cash]').click();
-    await tab.getByRole('button',{name:'Сохранить',exact:true}).click();
-  }
-  await recordIncome(page,'8');
-  await button('Сводка').waitFor();
-  await recordIncome(other,'9');
-  await other.getByRole('alert').filter({hasText:'Данные изменились в другой вкладке. Откройте приложение заново.'}).waitFor();
-  assert.equal(await other.getByRole('button',{name:'Сохранить',exact:true}).count(),1);
-  await other.reload();
-  await other.getByRole('button',{name:'Сводка',exact:true}).click();
-  await other.locator('[data-section-action=received]').click();
-  assert.equal(await other.locator('[data-operation]').count(),2);
-  await upgrade.close();
-  console.log('PASS upgrade from',base,'same encrypted database, reload/offline, stale write remains uncommitted');
 }finally{
   await browser?.close();
   await new Promise(resolve=>server.close(resolve));

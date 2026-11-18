@@ -2,43 +2,16 @@ import {FinRate} from './engine/service.mjs';
 import {createStore} from './engine/store.mjs';
 import {authorizeVault, createVault} from './engine/crypto.mjs';
 import {createAccess} from './engine/device-access.mjs';
-import {addAccount, addCategory, changed, fail, money, newDocument, totals, uid} from './engine/model.mjs';
+import {addCategory, fail, money, newDocument, totals, uid} from './engine/model.mjs';
 import {cancelOperation, saveOperation} from './engine/operations.mjs';
 
 const store = createStore('finrate-full-test-restart-v1');
 const engine = new FinRate(store);
 
-function initialDocument() {
-  const doc = newDocument();
-  addAccount(doc, {id:'card', name:'Карта', opening:5243000});
-  addAccount(doc, {id:'cash', name:'Копилка', kind:'cash', opening:650000});
-  addAccount(doc, {id:'spare', name:'Запасная карта'});
-  for (const [type, groups] of [
-    ['expense', [
-      ['food','Продукты',['Супермаркеты']], ['cafes','Кафе и рестораны',['Кофе']],
-      ['home','Дом и коммунальные услуги',['ЖКХ','Аренда']],
-      ['transport','Транспорт',['Такси']], ['health','Здоровье',[]],
-      ['other','Прочие расходы',[]]
-    ]],
-    ['income', [
-      ['salary','Зарплата',['Аванс','Основная часть']],
-      ['extra','Дополнительный доход',['Подработка','Премия']],
-      ['other-income','Прочие поступления',[]]
-    ]]
-  ]) {
-    for (const [id,name,children] of groups) {
-      addCategory(doc,{id, name, type});
-      for (const [index,name] of children.entries()) addCategory(doc,{id:id+'-'+index, name, type, parentId:id});
-    }
-  }
-  changed(doc,'setup');
-  return doc;
-}
-
 export async function boot() {
   if (!await store.read()) {
     const password = uid() + uid();
-    const {vault} = await createVault(initialDocument(),password);
+    const {vault} = await createVault(newDocument(),password);
     const auth = await authorizeVault(vault,password);
     try {
       const access = await createAccess(vault,auth.raw,'none');

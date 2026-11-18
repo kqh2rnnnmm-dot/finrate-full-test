@@ -1,18 +1,23 @@
 {
   "name": "finrate-full",
-  "version": "0.2.0-test.1",
+  "version": "0.2.0-test.2",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
     "test": "node tests/flows.mjs",
     "test:financial": "node tests/financial-links.mjs",
-    "test:acceptance": "node tests/acceptance.mjs"
+    "test:acceptance": "node tests/acceptance.mjs",
+    "test:update": "node tests/update.mjs",
+    "test:visual": "node tests/visual-patch.mjs"
   },
-  "dependencies": {"dexie": "4.4.6"},
+  "dependencies": {
+    "dexie": "4.4.6"
+  },
   "devDependencies": {
     "@sparticuz/chromium": "153.0.0",
     "esbuild": "0.28.2",
+    "lucide": "0.468.0",
     "playwright": "1.62.1"
   }
 }
