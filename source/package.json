@@ -1,11 +1,13 @@
 {
   "name": "finrate-full",
-  "version": "0.1.0",
+  "version": "0.2.0-test.1",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node tests/flows.mjs"
+    "test": "node tests/flows.mjs",
+    "test:financial": "node tests/financial-links.mjs",
+    "test:acceptance": "node tests/acceptance.mjs"
   },
   "dependencies": {"dexie": "4.4.6"},
   "devDependencies": {

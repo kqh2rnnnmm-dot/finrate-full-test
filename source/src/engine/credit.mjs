@@ -42,7 +42,6 @@ export function balanceSnapshot(before,after,input){const a=balances(before),b=b
 export function assertCreditTimeline(d){
  const ledger=creditLedger(d);
  for(const a of d.accounts.filter(isCredit)){
-  if(a.opening>0)fail('CREDIT_OVERPAY');
   let balance=a.opening;
   const events=d.operations.flatMap((o,index)=>postings(o).filter(([id])=>id===a.id).map(([,amount])=>({o,amount,index,date:o.kind==='transfer'&&a.id===o.toAccountId?o.creditDate||o.date:o.debitDate||o.date}))).sort((x,y)=>x.date.localeCompare(y.date)||(x.o.sequence??x.index)-(y.o.sequence??y.index));
   for(const {o,amount}of events){

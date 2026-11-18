@@ -21,7 +21,7 @@ const url='http://127.0.0.1:'+server.address().port+scope;
 let browser;
 try{
   browser=await chromium.launch({executablePath:await binary.executablePath(),args:binary.args.filter(arg=>arg!=='--single-process')});
-  for(const [width,height,mode] of [[320,568,'light'],[390,844,'dark']]){
+  for(const [width,height] of [[320,568],[390,844]])for(const mode of ['light','dark']){
     const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true,colorScheme:mode,reducedMotion:'reduce'});
     const page=await context.newPage();
     const errors=[];
@@ -49,7 +49,11 @@ try{
     assert.equal(await page.locator('details[open]').getAttribute('data-menu-group'),'Учёт');
     await button('Закрыть меню').click();
 
-    await page.locator('[data-entry=expense]').tap();
+    if(mode==='dark'){
+      const knob=await page.locator('.fr-knob').boundingBox();
+      const x=knob.x+knob.width/2,y=knob.y+knob.height/2;
+      await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x,y-106,{steps:10});await page.mouse.up();
+    }else await page.locator('[data-entry=expense]').tap();
     await title('Расход');
     assert.equal(await button('Далее').isDisabled(),true);
     for(const key of ['1','2','Запятая','5'])await button(key).click();
@@ -88,7 +92,7 @@ try{
 
     await button('Сводка').click();
     assert.match(await page.locator('.np-row').first().innerText(),/37,5/);
-    await page.locator('[data-action=received]').click();
+    await page.locator('[data-section-action=received]').click();
     assert.equal(await page.locator('[data-operation]').count(),1);
     assert.match(await page.locator('[data-operation]').innerText(),/Аванс/);
     await page.locator('[data-operation]').click();
@@ -123,7 +127,7 @@ try{
     await context.setOffline(true);
     await page.reload();
     await button('Сводка').click();
-    await page.locator('[data-action=received]').click();
+    await page.locator('[data-section-action=received]').click();
     assert.equal(await page.locator('[data-operation]').count(),1);
     assert.deepEqual(errors,[]);
     await context.close();

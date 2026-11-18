@@ -1,3 +1,4 @@
+import {validateMonthBudget} from './month-budget.mjs';
 import {validateLimits,validateLimitDraft} from './limits.mjs';
 import {validateGoals,validateGoalDraft,validateGoalTile} from './goals.mjs';
 import {validateDebts,validateDebtDraft} from './debts.mjs';
@@ -33,7 +34,7 @@ export function addAccount(d,{name,kind='bank',opening=0,id=uid(),financeType='d
   if(d.accounts.some(a=>normalized(a.name)===normalized(name)))fail('NAME_EXISTS');
   if(d.accounts.some(a=>a.id===id))fail('DUPLICATE');
   if(!['debit','credit'].includes(financeType))fail('ACCOUNT_KIND');
-  if(financeType==='credit'){validateCredit(credit);if(opening>0)fail('CREDIT_OVERPAY');}
+  if(financeType==='credit')validateCredit(credit);
   if(financeType==='debit'&&opening<0)fail('INSUFFICIENT_FUNDS');
   if(financeType==='credit'&&opening < -credit.limit)fail('CREDIT_LIMIT');
   if(financeType==='credit'&&opening<0&&!credit.openingLots)fail('CREDIT_DUE');
@@ -186,6 +187,6 @@ export function validateDocument(d){
     for(const t of s.homeTiles){validateGoalTile(d,t);if(!t||!['expense','income','last','payment','limits','reserves','goal','debts','account','drafts',...(d.schema>=4?['credit']:[])].includes(t.metric)||t.accountId&&!d.accounts.some(a=>a.id===t.accountId))fail('SCHEMA');if(t.metric==='credit'&&(!d.accounts.some(a=>a.id===t.accountId&&a.financeType==='credit')||!['due','total'].includes(t.creditMetric)))fail('CREDIT_SETTINGS');}
     for(const c of d.categories)if(c.mergedInto){const target=d.categories.find(x=>x.id===c.mergedInto);if(!c.archived||!target||target.id===c.id||target.type!==c.type||!!target.parentId!==!!c.parentId)fail('SCHEMA');let next=target,seen=new Set([c.id]);while(next){if(seen.has(next.id))fail('SCHEMA');seen.add(next.id);next=d.categories.find(x=>x.id===next.mergedInto);}}
   }
-  balances(d);if(d.schema>=5){assertCreditTimeline(d);if(d.planning!==undefined)validatePlanningShape(d);validatePayments(d);validateDebts(d);validateGoals(d);validateLimits(d);}return d;
+  balances(d);if(d.schema>=5){assertCreditTimeline(d);if(d.planning!==undefined)validatePlanningShape(d);validatePayments(d);validateDebts(d);validateGoals(d);validateLimits(d);validateMonthBudget(d);}return d;
 }
 export function changed(d,action){d.revision++;d.updatedAt=now();d.events.push({id:uid(),at:d.updatedAt,action,revision:d.revision});validateDocument(d);return d;}

@@ -1,5 +1,5 @@
 const prefix='finrate-full-restart:'+self.registration.scope+':';
-const cacheName=prefix+'c581f16f13f4ccec';
+const cacheName=prefix+'37f004b2c7c9f246';
 const assets=["index.html","styles.css","manifest.webmanifest","icon-192.png","icon-512.png","apple-touch-icon.png","app.js"].map(path=>new URL(path,self.registration.scope).href);
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
