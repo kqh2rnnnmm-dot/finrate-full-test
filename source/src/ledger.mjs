@@ -50,6 +50,7 @@ export async function boot() {
 }
 
 export const document = () => engine.document;
+export const mutate = (action, fn) => engine.mutate(action,fn);
 export const fact = range => totals(document(),range);
 export const addOperationCategory = entry => engine.mutate('category.add',doc=>addCategory(doc,entry));
 export const cancel = id => engine.mutate('operation.cancel',doc=>cancelOperation(doc,id));
@@ -63,7 +64,7 @@ export function save(draft, previous) {
     if (amount<=0 || amount>99999999999 || draft.note.length>500) fail('AMOUNT');
     return saveOperation(doc,{
       id:draft.id, kind:draft.kind, accountId:draft.accountId, date:draft.date,
-      amount, note:draft.note, allocations:[{categoryId:draft.categoryId,amount}]
+      amount, note:draft.note, ...(draft.creditDueDate ? {creditDueDate:draft.creditDueDate} : {}), allocations:[{categoryId:draft.categoryId,amount}]
     },previous?{editId:previous.id,editBase:JSON.stringify(previous)}:undefined);
   });
 }

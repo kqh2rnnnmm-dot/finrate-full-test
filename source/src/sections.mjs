@@ -1,0 +1,116 @@
+import {accountMark, amountText, dateText, esc, heading, icon, monthHeader, primary, categoryLabel, operationRows} from './screens.mjs';
+
+export const link = (label, action, id='', detail='') =>
+  `<button type="button" class="np-link" data-section-action="${action}" data-id="${esc(id)}"><span><span class="fr-section-name" data-full-name>${esc(label)}</span>${detail}</span>${icon('next')}</button>`;
+export const small = value => `<small class="fr-muted">${esc(value)}</small>`;
+export const moneyLabel = value => `<strong class="np-money">${amountText(value)}</strong>`;
+export const pair = (label,value) => `<div class="np-row"><span>${esc(label)}</span>${moneyLabel(value)}</div>`;
+export const panel = body => `<div class="fr-section-panel">${body}</div>`;
+export const body = content => `<div class="np-body" data-section-scroll>${content}</div>`;
+export const empty = text => `<p class="fr-no-operations">${esc(text)}</p>`;
+export const plus = (action,label) => `<button class="fr-category-new" type="button" data-section-action="${action}" aria-label="${esc(label)}">${icon('plus')}</button>`;
+export const calendarIcon = () => icon('calendar');
+export const actionButton = (label,action) => `<button type="button" class="fr-section-secondary" data-section-action="${action}">${esc(label)}</button>`;
+export const tabs = (items,current) => `<div class="fr-section-tabs">${items.map(([id,label])=>`<button type="button" data-section-action="tab" data-id="${id}" aria-pressed="${id===current}">${esc(label)}</button>`).join('')}</div>`;
+const decimal = value => String(value ?? '').replace('.',',');
+const option = (value,label,selected) => `<option value="${esc(value)}" ${String(selected)===String(value)?'selected':''}>${esc(label)}</option>`;
+export function field({key,label,type='text',options,placeholder='',required=true,maxlength=100},value) {
+  const control = options
+    ? `<select name="${key}" ${required?'required':''}>${options.map(([id,label])=>option(id,label,value)).join('')}</select>`
+    : type==='checkbox'
+      ? `<input type="checkbox" name="${key}" ${value?'checked':''}>`
+      : `<input type="${type==='money'?'text':type}" ${type==='money'?'inputmode="decimal" data-decimal':''} name="${key}" value="${esc(type==='money'?decimal(value):value)}" placeholder="${esc(placeholder)}" maxlength="${maxlength}" ${required?'required':''} autocomplete="off">`;
+  return `<label class="fr-section-field ${type==='checkbox'?'fr-check-field':''}"><span>${esc(label)}</span>${control}</label>`;
+}
+
+export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside=''}) {
+  return heading(title)+`<form class="fr-section-form" data-section-form><div class="np-body" data-section-scroll>${
+    fields.map(f=>field(f,values[f.key])).join('')
+  }${inside}<p class="fr-create-error" role="alert">${esc(error)}</p></div><button type="submit" class="fr-primary" ${busy?'disabled':''}>${esc(submitLabel)}</button></form>`;
+}
+
+export function monthControl(month) {
+  return monthHeader(Number(month.slice(0,4)),Number(month.slice(5,7))-1)
+    .replaceAll('data-month=', 'data-section-action="month" data-id=');
+}
+
+export function budgetBar(plan,spent) {
+  const scale = Math.max(plan,spent,1);
+  return `<div class="fr-budget-bar" role="img" aria-label="План ${esc(amountText(plan))}, расход ${esc(amountText(spent))}"><span style="width:${Math.min(plan,spent)/scale*100}%"></span>${spent>plan?`<span class="fr-budget-over" style="width:${(spent-plan)/scale*100}%"></span>`:''}</div>`;
+}
+export function summary(month, budget) {
+  return heading('Сводка','',`<button type="button" class="fr-category-new" data-section-action="budget-settings" aria-label="Настройки сводки">⚙</button>`)+monthControl(month)+body(
+    pair('Результат месяца',budget.result)+link('Получено','received','',moneyLabel(budget.income))+
+    link('Накопления','savings')+link('Можно тратить','money','',moneyLabel(budget.available))+
+    pair('План доходов',budget.expected)+
+    budget.categories.map(c=>`<div class="fr-summary-category">${link(c.name,'share',c.id,moneyLabel(c.spent))}
+      ${budgetBar(c.plan,c.spent)}${small('План '+amountText(c.plan))}
+      ${c.spent>c.plan?`<p class="fr-over-budget">Бюджет превышен на ${amountText(c.spent-c.plan)}</p>`:''}</div>`).join('')
+  );
+}
+
+export function shareScreen(state,categories,plan,step) {
+  return heading(state.title)+`<div class="np-island fr-share-totals">
+    <div class="np-row"><span>Распределено</span><strong data-share-total></strong></div>
+    <div class="fr-budget-bar"><span data-share-bar></span></div>
+    <div class="np-row"><span data-share-free></span><small>${amountText(plan)}</small></div>
+    <p class="fr-create-error" data-share-error role="status"></p>
+  </div>`+body(categories.map(c=>`<div class="fr-section-panel fr-share-panel">
+    ${state.single?'':link(c.name,'share-detail',c.id)}
+    <div class="fr-share-values"><small data-share-amount></small>
+      <label class="fr-share-field"><input type="text" inputmode="decimal" data-share-input data-id="${esc(c.id)}" aria-label="Процент ${esc(c.name)}" placeholder="0" value="${esc(state.values[c.id])}"><span>%</span></label>
+    </div>
+    <input type="range" min="0" max="100" step="${step}" value="${Number(state.values[c.id])||0}" data-share-slider data-id="${esc(c.id)}" aria-label="Ползунок ${esc(c.name)}">
+  </div>`).join('')||empty('Категорий пока нет.'))+`<p class="fr-create-error fr-section-error" role="alert">${esc(state.error)}</p>`+
+    primary(state.single && state.parentDraft?'Готово':'Сохранить','section-save-share');
+}
+
+export function goalCard(goal,history=false) {
+  const progress = goal.target ? Math.min(100,goal.accumulated/goal.target*100) : 0;
+  if (!history) return `<div class="fr-goal-preview">${link(goal.name,'goal',goal.categoryId)}${moneyLabel(goal.remaining)}
+    ${small('Можно тратить')}${goal.due?small(dateText(goal.due)):''}
+    <progress max="${goal.target}" value="${Math.min(goal.target,goal.accumulated)}" aria-label="Прогресс накопления"></progress>
+    ${small('Накоплено '+amountText(goal.accumulated)+' из '+amountText(goal.target))}
+  </div>`;
+  return panel((history?`<h2 class="fr-section-title">${esc(goal.name)}</h2>`:link(goal.name,'goal',goal.categoryId))+
+    (goal.due?small(dateText(goal.due)):'')+pair('Цель',goal.target)+pair('Накоплено',goal.accumulated)+
+    `<div class="fr-budget-bar"><span style="width:${progress}%"></span></div>`+
+    pair('Потрачено',goal.spent)+pair('Осталось',goal.remaining)+
+    (history?small('Цель достигнута · '+dateText(goal.date)):pair('До цели',Math.max(0,goal.target-goal.accumulated))));
+}
+
+export function accountCard(account,balance) {
+  return link(account.name,'account',account.id,`<span class="fr-section-amount">${moneyLabel(balance)}${accountMark(account)}</span>`);
+}
+
+export function recordHistory(doc,operation) {
+  const timeline = doc.operationEdits.filter(r=>r.operationId===operation.id);
+  const describe = (key,op) => ({
+    amount:()=>amountText(op.amount),
+    date:()=>dateText(op.date),
+    accountId:()=>doc.accounts.find(a=>a.id===op.accountId)?.name,
+    toAccountId:()=>doc.accounts.find(a=>a.id===op.toAccountId)?.name,
+    categoryId:()=>op.allocations.map(a=>categoryLabel(doc,a.categoryId).name).join(', '),
+    note:()=>op.note,
+    creditDueDate:()=>op.creditDueDate && dateText(op.creditDueDate)
+  })[key]() || '—';
+  const fields = {amount:'Сумма',date:'Дата',accountId:'Счёт',toAccountId:'Счёт зачисления',categoryId:'Категория',note:'Заметка',creditDueDate:'Срок'};
+  return timeline.map((row,index)=>{
+    const after = timeline[index+1]?.before || operation;
+    const changes = Object.entries(fields).map(([key,label])=>{
+      const before = describe(key,row.before), value = describe(key,after);
+      return before===value?'':`<div class="fr-history-change"><span>${label}</span><del>${esc(before)}</del><strong>${esc(value)}</strong></div>`;
+    }).join('');
+    return panel(small(new Intl.DateTimeFormat('ru-RU',{dateStyle:'short',timeStyle:'short'}).format(new Date(row.at)))+
+      `<strong>${after.cancelled && !row.before.cancelled?'Отмена':'Изменение'}</strong>`+changes);
+  }).reverse().join('')+panel('<strong>Операция записана</strong>'+small(dateText((timeline[0]?.before || operation).date)));
+}
+
+export function recordRows(doc,rows,query='',filters={}) {
+  return operationRows(doc,rows.filter(o=>
+    (!filters.from || o.date>=filters.from) && (!filters.to || o.date<=filters.to) &&
+    (!filters.kind || o.kind===filters.kind) && (!filters.account || [o.accountId,o.toAccountId].includes(filters.account)) &&
+    (!filters.category || o.allocations.some(a=>a.categoryId===filters.category ||
+      doc.categories.find(c=>c.id===a.categoryId)?.parentId===filters.category))
+  ),query);
+}
