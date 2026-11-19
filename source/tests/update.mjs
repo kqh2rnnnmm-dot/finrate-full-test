@@ -8,7 +8,7 @@ import {chromium} from 'playwright';
 import binary from '@sparticuz/chromium';
 import {scope,serveFixture,fixture} from './fixture-server.mjs';
 
-const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819'};
+const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819',previous:'0a0fd28c7db8f2e50361b34ff4776f5a2d210cc6'};
 const work=await mkdtemp(join(tmpdir(),'finrate-update-'));
 const results=process.env.FINRATE_UPDATE_SCREENSHOTS || 'verification/visual-patch';
 const readBuild=async path=>JSON.parse((await readFile(join(path,'sw.js'),'utf8')).match(/const build = (.*);/)[1]);
@@ -195,6 +195,47 @@ try{
   assert.deepEqual(await fixture(published,url),existing);
   await upgrade.close();
   console.log('PASS published 8fd14ef: manual update preserves accounts, categories, and own operation');
+
+  served='previous';
+  const upgradeGoals=await browser.newContext(options);
+  const goalsPage=await upgradeGoals.newPage();
+  await goalsPage.clock.setFixedTime(new Date('2026-11-19T12:00:00Z'));
+  await fixture(goalsPage,url,'visual');
+  await goalsPage.goto(url);
+  await ready(goalsPage);
+  assert.equal(await root(goalsPage).getAttribute('data-release'),'0.2.0-test.3');
+  const goalButton=name=>button(goalsPage,name);
+  await goalButton('Сводка').click();
+  await goalButton('Накопления').click();
+  for(const id of ['holiday','notebook']){
+    await goalsPage.locator(`[data-section-action=goal][data-id=${id}]`).click();
+    await goalButton('Цель достигнута').click();
+    await goalButton('Цель достигнута').click();
+    await goalsPage.getByRole('heading',{name:'Накопления',exact:true}).waitFor();
+  }
+  const oldGoals=await fixture(goalsPage,url);
+  assert.ok(oldGoals.goals.every(g=>g.closed && !('operationRefs' in g.closed)));
+  await goalsPage.goto(url);
+  served='A';
+  await update(goalsPage);
+  await goalsPage.getByText('Доступна версия '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
+  await goalButton('Обновить').click();
+  await goalsPage.getByText('Обновлено до '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
+  await coherent(goalsPage,A);
+  await goalButton('Сводка').click();
+  await goalButton('Накопления').click();
+  await goalButton('История накоплений').click();
+  for(const [id,status,amount] of [['holiday','Накоплено и потрачено','50 000'],['notebook','Накоплено','10 000']]){
+    await goalsPage.locator(`[data-section-action=closed-goal][data-id=${id}]`).click();
+    const total=goalsPage.locator('.fr-goal-total');
+    assert.ok((await total.innerText()).replace(/\s/g,' ').includes(amount));
+    assert.ok((await total.innerText()).includes(status+' · 19 нояб. 2026'));
+    assert.equal(await goalsPage.locator('[data-closed-expenses]').count(),0);
+    await goalButton('Назад').click();
+  }
+  assert.deepEqual(await fixture(goalsPage,url),oldGoals);
+  await upgradeGoals.close();
+  console.log('PASS published 0a0fd28: closed goals from test.3 open after manual update, with original snapshots');
 
   for(const ownData of [false,true]){
     served='legacy';

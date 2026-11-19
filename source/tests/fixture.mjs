@@ -1,9 +1,9 @@
 import * as ledger from '../src/ledger.mjs';
-import {addAccount,addCategory} from '../src/engine/model.mjs';
+import {addAccount,addCategory,archive} from '../src/engine/model.mjs';
 import {localDate,saveOperation,cancelOperation} from '../src/engine/operations.mjs';
 import {saveIncome,confirmPlannedIncome} from '../src/engine/planning.mjs';
 import {savePaymentPlan,confirmPayment,setPaymentPaused} from '../src/engine/scheduled-payments.mjs';
-import {saveShares,saveSavingsGoal,assignSavings} from '../src/engine/month-budget.mjs';
+import {saveShares,saveSavingsGoal,assignSavings,closeSavings} from '../src/engine/month-budget.mjs';
 
 const expense=[
   ['food','Продукты',['Супермаркеты']],['cafes','Кафе и рестораны',['Кофе']],
@@ -75,10 +75,22 @@ function audit(d) {
   cancelOperation(d,'audit-cancelled');
 }
 
+function patch04(d) {
+  visual(d);
+  const date=localDate();
+  for(let i=1;i<=12;i++){
+    const id='old-'+i;
+    saveSavingsGoal(d,{id,name:'Завершённая цель '+i,target:100000,due:'',bps:0,today:date});
+    closeSavings(d,id,date);
+  }
+  addAccount(d,{id:'archived-credit',name:'Кредитная в архиве',financeType:'credit',credit:{limit:100000,grace:{mode:'statement'}}});
+  archive(d,'accounts','archived-credit');
+}
+
 try{
   await ledger.boot();
   const mode=new URLSearchParams(location.search).get('mode');
-  const seed={regression:basic,visual,audit}[mode];
+  const seed={regression:basic,visual,audit,patch04}[mode];
   if(seed)await ledger.mutate('test.fixture',seed);
   const d=ledger.document();
   document.body.textContent=JSON.stringify({

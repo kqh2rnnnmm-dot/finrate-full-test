@@ -527,7 +527,7 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-share-free{gap:6px 12px;margin-top:4px;font-size:15px}
 #finrate .fr-share-free strong{font-size:26px;white-space:nowrap}
 #finrate .fr-share-basis{border-top:1px solid var(--line);padding-top:8px;margin:10px 0 0;font-size:15px}
-#finrate .fr-share-room{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:var(--panel);font-size:14px;color:var(--ink)}
+#finrate .fr-share-room{margin:10px 0 0;font-size:15px;color:var(--dim)}
 #finrate .fr-share-values [data-share-amount]{display:block;font-size:18px;margin-top:3px}
 #finrate .fr-income-plan-row,#finrate .fr-income-event{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:5px 12px;width:100%;padding:15px 0;text-align:left;border:0;background:transparent;font-size:16px}
 #finrate .fr-income-plan-row>span:last-child,#finrate .fr-income-event-amount{text-align:right}
@@ -569,3 +569,31 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-payment-tab-top .fr-section-tabs [aria-pressed=true]{background:var(--planned-button)}
 #finrate .fr-payment-facts{padding:3px;border-radius:15px;background:var(--soft)}
 #finrate .fr-payment-facts .fr-section-tabs button{font-size:14px}
+
+#finrate .fr-goal-total{padding:26px 0 30px}
+#finrate .fr-goal-total .fr-muted{display:block;margin:0 0 12px;font-size:18px}
+#finrate [data-section-page] .fr-goal-total>.np-money{display:block;font-size:clamp(30px,9vw,42px);line-height:1.2;font-weight:650;letter-spacing:-1px}
+#finrate .fr-goal-total .fr-muted:last-child{margin:12px 0 0;font-size:16px;line-height:1.45}
+#finrate .fr-goal-facts{margin:14px 0 0}
+#finrate .fr-goal-facts>div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:16px;padding:12px 0}
+#finrate .fr-goal-facts dt{color:var(--dim);line-height:1.5;overflow-wrap:anywhere}
+#finrate .fr-goal-facts dd{margin:0;font-size:18px;line-height:1.5}
+#finrate .fr-goal-detail-progress{display:block;appearance:none;-webkit-appearance:none;width:100%;height:8px;margin:18px 0 10px;border:0;border-radius:6px;overflow:hidden;background:var(--soft)}
+#finrate .fr-goal-detail-progress::-webkit-progress-bar{background:var(--soft);border-radius:6px}
+#finrate .fr-goal-detail-progress::-webkit-progress-value{background:var(--palette-20);border-radius:6px}
+#finrate .fr-goal-detail-progress::-moz-progress-bar{background:var(--palette-20);border-radius:6px}
+#finrate .fr-goal-as-of{margin:14px 0;color:var(--dim);line-height:1.6}
+#finrate .fr-goal-management{display:flex;flex-direction:column;gap:14px}
+#finrate .fr-goal-context{font-size:22px;line-height:1.35;margin:12px 0 10px;overflow-wrap:anywhere}
+#finrate .fr-goal-management .fr-section-secondary{min-height:54px;flex:none;margin:0;padding:14px 20px;border-radius:18px;font-size:17px}
+#finrate .fr-closed-goal-preview>.fr-muted:first-of-type{display:block;font-size:14px;margin-top:10px}
+#finrate [data-closed-expenses] summary{display:flex;justify-content:space-between;align-items:center;min-height:48px;cursor:pointer;font-weight:600}
+#finrate [data-closed-expenses] summary::-webkit-details-marker{display:none}
+#finrate [data-closed-expenses] summary svg{width:16px;height:16px;color:var(--dim)}
+#finrate [data-closed-expenses][open] summary svg{transform:rotate(180deg)}
+#finrate [data-closed-expenses] button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;min-height:72px;border:0;background:transparent;text-align:left;font-size:17px}
+#finrate [data-closed-expenses] button>span{min-width:0;font-weight:600;overflow-wrap:anywhere}
+#finrate [data-closed-expenses] button small{display:block;margin-top:5px;color:var(--dim);font-size:15px;font-weight:400}
+#finrate [data-closed-expenses] button[data-cancelled=true]{color:var(--dim)}
+
+#finrate [data-section-page] .fr-goal-context+.fr-muted+.np-money{display:block;margin:6px 0 30px;font-size:25px}

@@ -136,3 +136,29 @@ test('Linking an existing income does not duplicate it; edits and cancellation c
   assert.equal(totals(d).income,0);
   assert.equal(d.planning.links.length,2);
 });
+
+test('Closed savings preserve only recorded operation links and freeze the outcome',()=>{
+  const d=setup();
+  budget.saveSavingsGoal(d,{id:'trip',name:'Тестовая поездка',target:1500000,due:'',bps:0,today:'2026-11-10'});
+  addCategory(d,{id:'hotel',name:'Отель',parentId:'trip'});
+  budget.assignSavings(d,{id:'assign-trip',categoryId:'trip',date:'2026-11-10',amount:800000});
+  saveOperation(d,fact('before-goal','expense',50000,'trip','2026-11-09'));
+  saveOperation(d,fact('related','expense',300000,'hotel'));
+  saveOperation(d,fact('unrelated','expense',300000,'housing'));
+  budget.closeSavings(d,'trip','2026-11-18');
+  const goal=budget.savings(d)[0];
+  assert.deepEqual(goal.closed.operationRefs.map(ref=>ref.id),['related']);
+  assert.equal(budget.closedSavingsOperations(d,goal).changed,false);
+  cancelOperation(d,'related');
+  saveOperation(d,fact('after-close','expense',100000,'trip','2026-11-19'));
+  const historical=budget.closedSavingsOperations(d,budget.savings(d)[0]);
+  assert.equal(historical.changed,true);
+  assert.deepEqual(historical.rows.map(op=>op.id),['related']);
+  assert.equal(historical.rows[0].cancelled,true);
+  assert.equal(budget.savings(d)[0].spent,300000);
+  assert.equal(budget.savings(d)[0].remaining,500000);
+  assert.deepEqual(migrateDocument(d).monthBudget,d.monthBudget);
+  delete d.monthBudget.goals[0].closed.operationRefs;
+  validateDocument(d);
+  assert.deepEqual(budget.closedSavingsOperations(d,budget.savings(d)[0]),{rows:[],changed:false});
+});
