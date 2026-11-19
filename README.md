@@ -9,3 +9,5 @@
 [Матрица приёмки и команды проверки](source/ACCEPTANCE.md) · [Пары скриншотов](source/verification/README.md)
 
 [Визуальный патч 0.2.0-test.2, обновление и первый запуск](source/verification/VISUAL_PATCH.md)
+
+[Исправления по UX-аудиту 0.2.0-test.3, карта входов и результаты](source/verification/UX_AUDIT.md)

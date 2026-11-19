@@ -1,5 +1,5 @@
 /* Selected rules from the accepted LAYOUT_FOLLOWUP_CANDIDATE prototype. */
-:root{color-scheme:light dark;--palette-1:#f2f2f5;--palette-2:#fff;--palette-3:#24262c;--palette-4:#e0e2e8;--palette-5:#e6e9ee;--palette-6:#858b96;--palette-7:#a43e47;--palette-8:#20794e;--palette-9:#566b8d35;--palette-10:#0669d6;--palette-11:#e5effc;--palette-12:#075fbf;--palette-13:#737985;--palette-14:#b12b3b;--palette-15:#0669d630;--palette-16:#222b4c12;--palette-17:#222b4c08;--palette-18:#f8e9ed;--palette-19:#222b4c18;--palette-20:#2378c8;--palette-21:#559be660;--palette-22:#986209;--palette-23:#c9973a65;--palette-24:#8052ae;--palette-25:#9c76c860;--palette-26:#0867d4;--palette-27:#20253330;--palette-28:#e1e9ff;--palette-29:#edf1fb;--palette-30:#cadbff;--palette-31:#ded7fb;--palette-32:#d4efed;--palette-33:#e5edf4;--palette-34:#bce2dc;--palette-35:#d9ebf1;--palette-36:#e1d7f4;--palette-37:#f1ebf6;--palette-38:#e3d2f2;--palette-39:#f2dce5;--palette-40:#2d67ce;--palette-41:#24262c24;}
+:root{color-scheme:light dark;--palette-1:#f2f2f5;--palette-2:#fff;--palette-3:#24262c;--palette-4:#e0e2e8;--palette-5:#e6e9ee;--palette-6:#596271;--palette-7:#a43e47;--palette-8:#20794e;--palette-9:#566b8d35;--palette-10:#0669d6;--palette-11:#e5effc;--palette-12:#075fbf;--palette-13:#737985;--palette-14:#b12b3b;--palette-15:#0669d630;--palette-16:#222b4c12;--palette-17:#222b4c08;--palette-18:#f8e9ed;--palette-19:#222b4c18;--palette-20:#2378c8;--palette-21:#559be660;--palette-22:#986209;--palette-23:#c9973a65;--palette-24:#8052ae;--palette-25:#9c76c860;--palette-26:#0867d4;--palette-27:#20253330;--palette-28:#e1e9ff;--palette-29:#edf1fb;--palette-30:#cadbff;--palette-31:#ded7fb;--palette-32:#d4efed;--palette-33:#e5edf4;--palette-34:#bce2dc;--palette-35:#d9ebf1;--palette-36:#e1d7f4;--palette-37:#f1ebf6;--palette-38:#e3d2f2;--palette-39:#f2dce5;--palette-40:#2d67ce;--palette-41:#24262c24;}
 @media(prefers-color-scheme:dark){:root{--palette-1:#1c1d22;--palette-2:#292c33;--palette-3:#f2f3f7;--palette-4:#41454f;--palette-5:#373b45;--palette-6:#a6adba;--palette-7:#f3a7b1;--palette-8:#8ed7af;--palette-9:#abc7fa50;--palette-10:#a7ceff;--palette-11:#243e5d;--palette-12:#a7ceff;--palette-13:#aeb5c1;--palette-14:#b52c3d;--palette-15:#00000050;--palette-16:#00000035;--palette-17:#00000015;--palette-18:#3c2931;--palette-19:#00000040;--palette-20:#8bbfff;--palette-21:#77acff70;--palette-22:#eac071;--palette-23:#e8b45770;--palette-24:#c9a3f1;--palette-25:#b787eb75;--palette-26:#85b9ff;--palette-27:#00000070;--palette-28:#202c46;--palette-29:#1f2534;--palette-30:#314d7e;--palette-31:#544171;--palette-32:#183e3d;--palette-33:#222b3c;--palette-34:#27625c;--palette-35:#294b63;--palette-36:#3e2b53;--palette-37:#292131;--palette-38:#5b3d70;--palette-39:#694858;--palette-40:#88baff;--palette-41:#0006;}}
 #finrate{padding:12px 0}
 #finrate *{box-sizing:border-box}
@@ -70,7 +70,7 @@
 #finrate .fr-menu-item i, #finrate .fr-menu-item svg{width:22px;height:22px;flex-shrink:0;color:var(--palette-13);stroke-width:1.9}
 #finrate .fr-menu-item span{min-width:0;overflow-wrap:anywhere}
 #finrate .fr-menu-item:active{background:var(--soft)}
-#finrate .fr-menu-item:focus-visible{outline:2px solid var(--line);outline-offset:1px}
+#finrate :is(button,summary,input,select,textarea):focus-visible{outline:2px solid var(--palette-12);outline-offset:-2px}
 #finrate .fr-menu-list{padding-top:6px}
 #finrate .fr-menu-accordion{border:0;border-radius:0;background:transparent;box-shadow:none;margin:0 0 8px;padding:0}
 #finrate .fr-menu-accordion>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:64px;padding:16px 4px;color:var(--ink);font-size:19px;line-height:1.35;font-weight:650;user-select:none;-webkit-user-select:none}
@@ -89,8 +89,8 @@
 #finrate .fr-filter-button{min-height:44px;padding:8px 0 8px 16px;border:0;background:transparent;color:var(--palette-12);font-size:17px;font-weight:600}
 #finrate .fr-operation-list{padding:0 24px 24px;flex:1;min-height:0;overflow:auto;scrollbar-width:thin;overscroll-behavior:contain}
 #finrate .fr-operation-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:7px 12px;min-height:76px;width:100%;padding:16px 0;border:0;border-radius:0;background:transparent;text-align:left}
-#finrate .fr-operation-name{grid-column:1/-1;font-size:17px;font-weight:600;line-height:1.4;overflow-wrap:break-word}
-#finrate .fr-operation-account{grid-row:2;grid-column:1;min-width:0;color:var(--dim);font-size:14px;line-height:1.4;overflow-wrap:break-word}
+#finrate .fr-operation-name{grid-column:1;font-size:17px;font-weight:600;line-height:1.4;overflow-wrap:break-word}
+#finrate .fr-operation-account{grid-column:1/-1;min-width:0;color:var(--dim);font-size:14px;line-height:1.4;overflow-wrap:break-word}
 #finrate .fr-operation-row:active{opacity:.7}
 #finrate .fr-no-operations{text-align:center;padding:24px 0;color:var(--dim);font-size:16px}
 #finrate .fr-leave-overlay{position:absolute;inset:0;display:flex;align-items:center;padding:24px;background:#11151e60;z-index:9}
@@ -305,7 +305,6 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-pole-top{color:var(--red)}
 #finrate .fr-pole-bottom{color:var(--green)}
 #finrate .fr-calendar{overflow:auto}
-#finrate .fr-menu-item:disabled{color:var(--dim)}
 #finrate .fr-cancelled .fr-operation-amount{text-decoration:line-through}
 #finrate [data-screen=operations] .fr-toolbar{pointer-events:auto}
 #finrate .fr-create-error:empty{display:none}
@@ -370,7 +369,6 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate [data-marked]::after{content:'';position:absolute;bottom:2px;left:calc(50% - 2px);width:4px;height:4px;border-radius:50%;background:var(--palette-20)}
 #finrate .fr-history-change{display:grid;gap:4px;margin-top:10px;font-size:15px;overflow-wrap:anywhere}
 #finrate .fr-history-change span,#finrate .fr-history-change del{color:var(--dim)}
-#finrate .fr-keypad-shortcut{margin:8px 24px 0;min-height:44px;border:0;border-radius:14px;background:var(--panel);font-size:16px}
 #finrate .fr-credit-type{padding:0 24px 8px}
 #finrate .fr-credit-menu{position:absolute;z-index:3;right:16px;top:68px;width:min(260px,calc(100% - 32px));padding:12px;border-radius:18px;background:var(--panel);box-shadow:0 6px 20px var(--palette-19)}
 #finrate .fr-credit-repay{display:flex;flex-direction:column;flex:none}
@@ -450,7 +448,7 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-category-children{padding-left:16px}
 #finrate .fr-category-children .np-link{font-size:16px}
 #finrate .fr-category-tab-island{position:absolute;bottom:0;left:24px;right:24px;margin-bottom:12px;z-index:2}
-#finrate .fr-screen:has(.fr-category-tab-island) .np-body{padding-bottom:84px}
+#finrate .fr-screen:has(.fr-category-tab-island) .np-body{padding-bottom:96px;scroll-padding-bottom:86px}
 #finrate .fr-goal-preview{display:block;width:100%;border:0;background:transparent;padding:18px 0 26px;margin:0 0 12px}
 #finrate .fr-goal-heading{display:grid;grid-template-columns:minmax(0,1fr) 20px;align-items:center;gap:12px;font-size:20px;text-align:left;overflow-wrap:anywhere}
 #finrate .fr-goal-heading svg{width:20px;height:20px;color:var(--dim)}
@@ -511,3 +509,63 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate [data-section-page]:has(.fr-credit-type) .fr-title.fr-full-name{white-space:normal;text-overflow:clip}
 #finrate [data-section-page] .fr-credit-values .np-money{font-size:16px}
 #finrate [data-section-page]:has(.fr-credit-type) .fr-header:has(.fr-full-name){height:auto!important;padding-block:10px!important}
+
+/* Keep the first number on summary and detail screens visually primary. */
+#finrate .fr-amount-overview{padding:12px 0 18px}
+#finrate [data-section-page] .fr-amount-overview>.np-money{display:block;margin:4px 0;font-size:clamp(26px,8.5vw,36px);line-height:1.2;letter-spacing:-.6px}
+#finrate .fr-summary-links{margin-bottom:10px}
+#finrate .fr-summary-links .np-link{min-height:44px;padding:8px 0;font-size:16px;font-weight:550}
+#finrate .fr-summary-links .np-money{font-size:16px}
+#finrate .fr-summary-category:has(.fr-muted):not(:has(.fr-budget-bar)){padding-block:7px 10px}
+#finrate .fr-summary-category:not(:has(.fr-budget-bar)) .np-link{padding-bottom:0;min-height:44px}
+#finrate .fr-summary-category:not(:has(.fr-budget-bar)) .fr-muted{margin-top:0}
+#finrate .fr-display-setting h2{margin:0 0 10px;font-size:15px;color:var(--dim)}
+#finrate .fr-display-toggle{display:grid;grid-template-columns:minmax(0,1fr) auto;text-align:left;align-items:center;gap:12px;width:100%;min-height:52px;padding:10px 12px;border:0;border-radius:16px;background:var(--panel);font-size:16px}
+#finrate .fr-display-toggle span{padding:5px 8px;border-radius:10px;background:var(--soft);font-size:14px}
+#finrate .fr-display-toggle[aria-checked=true] span{background:var(--palette-11);color:var(--palette-12)}
+
+#finrate .fr-share-free{gap:6px 12px;margin-top:4px;font-size:15px}
+#finrate .fr-share-free strong{font-size:26px;white-space:nowrap}
+#finrate .fr-share-basis{border-top:1px solid var(--line);padding-top:8px;margin:10px 0 0;font-size:15px}
+#finrate .fr-share-room{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:var(--panel);font-size:14px;color:var(--ink)}
+#finrate .fr-share-values [data-share-amount]{display:block;font-size:18px;margin-top:3px}
+#finrate .fr-income-plan-row,#finrate .fr-income-event{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:5px 12px;width:100%;padding:15px 0;text-align:left;border:0;background:transparent;font-size:16px}
+#finrate .fr-income-plan-row>span:last-child,#finrate .fr-income-event-amount{text-align:right}
+#finrate .fr-income-plan-row strong,#finrate .fr-income-event-name{overflow-wrap:anywhere}
+#finrate .fr-income-event{padding:12px;margin:0 0 8px;border-radius:16px;background:var(--panel)}
+#finrate .fr-income-event-date,#finrate .fr-income-event-status{font-size:14px;line-height:1.4;font-weight:600;color:var(--dim)}
+#finrate .fr-income-event-status{text-align:right;max-width:16ch}
+#finrate .fr-income-event-name{align-self:end}
+#finrate .fr-income-event-amount .fr-muted{font-size:13px}
+#finrate .fr-goal-progress{padding:8px 0 12px}
+#finrate .fr-goal-progress .fr-muted:first-child{font-weight:650;color:var(--ink)}
+#finrate .fr-goal-progress progress{display:block;width:100%;height:8px;margin:8px 0;border:0;border-radius:6px;overflow:hidden;accent-color:var(--palette-20)}
+#finrate .fr-goal-preview .fr-goal-progress progress{margin:8px 0}
+#finrate .fr-goal-available{display:flex;align-items:baseline;gap:8px 12px;justify-content:space-between}
+#finrate .fr-goal-preview .fr-goal-available .fr-muted{margin:0}
+#finrate .fr-goal-preview .fr-goal-available .np-money{font-size:18px}
+
+#finrate .fr-operation-row{row-gap:4px}
+#finrate .fr-operation-category{grid-column:1/-1;font-size:15px;overflow-wrap:anywhere}
+#finrate .fr-operation-status{grid-column:1/-1;justify-self:start;border-radius:6px;padding:2px 6px;background:var(--soft);color:var(--dim);font-size:13px;font-weight:600}
+#finrate .fr-screen[data-screen=operations]>.fr-toolbar{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:8px}
+#finrate .fr-toolbar .fr-payment-actions-input{min-width:0;width:100%}
+#finrate .fr-toolbar .fr-filter-button{min-height:44px;padding:7px 10px;gap:5px;white-space:nowrap;font-size:14px}
+#finrate .fr-filter-count{display:grid;place-items:center;min-width:20px;height:20px;padding:0 4px;border-radius:20px;background:var(--palette-11);color:var(--palette-12);font-weight:650}
+#finrate .fr-version{font-size:13px}
+
+#finrate .fr-credit-zero{margin:8px 0 18px;font-size:24px;font-weight:650}
+#finrate .fr-credit-main-debt{min-height:44px;margin-bottom:4px}
+#finrate .fr-credit-next-due{margin:0 0 16px;font-size:14px;color:var(--dim)}
+#finrate .fr-credit-next-due strong{color:var(--ink)}
+#finrate .fr-transfer-total{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;text-align:left;padding:0;border:0;background:transparent}
+#finrate .fr-transfer-total svg{width:20px;height:20px;color:var(--dim)}
+#finrate .fr-transfer-field h2{font-weight:650}
+#finrate .fr-screen:has([data-section-action=transfer-save]) .fr-transfer-balance{font-size:15px;color:var(--dim);font-weight:500}
+#finrate .fr-transfer-swap:not(:disabled){color:var(--palette-12);background:var(--palette-11)}
+
+#finrate .fr-payment-tab-island{display:grid;gap:6px;padding:0;background:none}
+#finrate .fr-payment-tab-top .fr-section-tabs button{background:var(--panel);font-size:14px}
+#finrate .fr-payment-tab-top .fr-section-tabs [aria-pressed=true]{background:var(--planned-button)}
+#finrate .fr-payment-facts{padding:3px;border-radius:15px;background:var(--soft)}
+#finrate .fr-payment-facts .fr-section-tabs button{font-size:14px}

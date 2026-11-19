@@ -1,6 +1,6 @@
 {
   "name": "finrate-full",
-  "version": "0.2.0-test.2",
+  "version": "0.2.0-test.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,8 @@
     "test:financial": "node tests/financial-links.mjs",
     "test:acceptance": "node tests/acceptance.mjs",
     "test:update": "node tests/update.mjs",
-    "test:visual": "node tests/visual-patch.mjs"
+    "test:visual": "node tests/visual-patch.mjs",
+    "test:ux": "node tests/ux-audit.mjs"
   },
   "dependencies": {
     "dexie": "4.4.6"

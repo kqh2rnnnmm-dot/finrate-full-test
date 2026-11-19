@@ -203,7 +203,8 @@ try{
     await back(app);await section('account','sample-zero').click();
     await ref.evaluate(()=>window.finrateReference.openCredit('Покупки по выписке'));
     await pair('V07-credit-zero');
-    assert.ok(await button(app,'Погасить').isDisabled());
+    assert.equal(await button(app,'Погасить').count(),0);
+    await app.getByText('Долга нет',{exact:true}).waitFor();
     await back(app);await back(app);
     await button(app,'Перевод').click();
     await openReference('TRANSFER_FINAL_CANDIDATE.html');await alignReference(snapshot,'transfer');

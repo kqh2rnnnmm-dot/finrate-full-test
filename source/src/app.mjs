@@ -25,7 +25,7 @@ const doc=ledger.document;
 const listNode=()=>host.querySelector('.fr-operation-list,.np-body');
 function move(to) { route=to;render(); }
 function resetDraft(){categoryRoot='';fixedAccount='';draft=null;previous=null;initial=null;editing=false;error='';leave=null;}
-const sectionRoutes=new Set(['summary','accounts','categories','transfer','payments','income-plans','distribution','savings','budget-settings']);
+const sectionRoutes=new Set(['summary','accounts','categories','transfer','payments','income-plans','savings','budget-settings']);
 const sections=createSections(host,{
   redraw:()=>move('section'),
   exit:()=>{
@@ -63,7 +63,7 @@ function operationsScreen(){
   const active=Object.values(operationFilters).filter(Boolean).length;
   return screen.heading('Операции')+`<div class="fr-toolbar"><input type="search" class="fr-payment-actions-input" data-search-operation
     aria-label="Поиск по категории, подкатегории, счёту или заметке" placeholder="Поиск" value="${screen.esc(operationQuery)}">
-    <button type="button" class="fr-filter-button" data-action="filter-open">Фильтры${active?' · '+active:''}</button></div>
+    <button type="button" class="fr-filter-button" data-action="filter-open" aria-label="Фильтры${active?' · '+active:''}"><span>Фильтры</span>${active?`<span class="fr-filter-count" aria-hidden="true">${active}</span>`:''}</button></div>
     <div class="fr-operation-list" data-operation-results>${recordRows(doc(),doc().operations,operationQuery,operationFilters)}</div>`;
 }
 function filterScreen(){
@@ -259,7 +259,6 @@ function action(id){
         exit:()=>move('account'),
         created:id=>chooseAccount(id)
       });
-    case 'income-plans-shortcut': return openSection('income-plans');
     case 'next':
       if(!validAmount(buffer))return;
       draft.amount=normalizedAmount(buffer);
@@ -292,7 +291,7 @@ function render(){
     case 'home': markup=screen.home();break;
     case 'menu': markup=screen.menu(menuGroup);break;
     case 'amount':
-      markup=screen.keypad(draft.kind,buffer,validAmount(buffer),draft.kind==='income'&&!editing&&origin==='home');
+      markup=screen.keypad(draft.kind,buffer,validAmount(buffer));
       break;
     case 'category': markup=screen.categoryPicker(doc(),draft,query,showCreate,categoryRoot);break;
     case 'category-new':

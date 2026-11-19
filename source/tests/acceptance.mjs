@@ -76,16 +76,9 @@ try{
     await button('Следующий месяц').click();
     assert.equal(await page.locator('.fr-month-title').innerText(),monthName);
     await section('budget-settings').click();
-    await section('slider-step').click();
-    await select('step','5');
-    await submit();
-    await section('distribution').click();
-    assert.equal(await page.locator('[data-share-slider]').first().getAttribute('step'),'5');
-    await fillShare('Продукты','100');
-    assert.equal(await button('Сохранить').isEnabled(),true);
-    await fillShare('Продукты','0');
-    await back();
-    await button('Выйти без сохранения').click();
+    assert.equal(await section('distribution').count(),0);
+    assert.equal(await section('income-plans').count(),0);
+    assert.equal(await section('slider-step').count(),0);
     await back();
     await section('share','food').click();
     await fillShare('Продукты','25');
@@ -168,13 +161,25 @@ try{
     await back();await back();await back();
     await button('Закрыть меню').click();
 
-    await menu('Планы и отчёты','Распределение плана');
+    await menu('Планы и отчёты','Планы доходов');
+    await section('distribution').click();
+    await section('slider-step').click();
+    await select('step','5');
+    await submit();
+    assert.equal(await page.locator('[data-share-slider]').first().getAttribute('step'),'5');
+    await fillShare('Продукты','100');
+    assert.equal(await button('Сохранить').isEnabled(),true);
+    await fillShare('Продукты','0');
+    assert.equal(await button('Сохранить').isEnabled(),true);
+    await fillShare('Продукты','25');
     await fillShare('Транспорт','90');
     assert.equal(await button('Сохранить').isDisabled(),true);
     await fillShare('Транспорт','30');
     await button('Сохранить').click();
-    await title('Меню');
-    await button('Цели').click();
+    await title('Планы доходов');
+    await back();
+    assert.equal(await button('Распределение плана').count(),0);
+    await button('Накопления').click();
     await button('Новая цель').click();
     await fill('name','Тестовая покупка');
     await fill('target','1000');
@@ -242,7 +247,8 @@ try{
     await creditBody.dispatchEvent('pointerdown',{pointerType:'mouse',clientY:170});
     await creditBody.dispatchEvent('pointerup',{pointerType:'mouse',clientY:270});
     assert.equal(await creditBlock.getAttribute('data-credit-folded'),'false');
-    assert.equal(await button('Погасить').isDisabled(),true);
+    assert.equal(await button('Погасить').count(),0);
+    await page.getByText('Долга нет',{exact:true}).waitFor();
     await button('Действия с картой').click();
     await button('Записать покупку').click();
     await page.keyboard.type('250');
@@ -259,7 +265,8 @@ try{
     await button('Далее').click();
     await button('Погасить').click();
     await title('Тестовая кредитная карта');
-    assert.equal(await button('Погасить').isDisabled(),true);
+    assert.equal(await button('Погасить').count(),0);
+    await page.getByText('Долга нет',{exact:true}).waitFor();
     await section('tab','records').click();
     assert.equal(await page.locator('[data-operation]').count(),2);
     if(!await button('Действия с картой').getAttribute('aria-expanded').then(s=>s==='true')){
