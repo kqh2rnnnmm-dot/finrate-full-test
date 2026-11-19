@@ -23,8 +23,8 @@ export function field({key,label,type='text',options,placeholder='',required=tru
   return `<label class="fr-section-field ${type==='checkbox'?'fr-check-field':''}"><span>${esc(label)}</span>${control}</label>`;
 }
 
-export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside=''}) {
-  return heading(title)+`<form class="fr-section-form" data-section-form><div class="np-body" data-section-scroll>${
+export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside='',insideBefore=''}) {
+  return heading(title)+`<form class="fr-section-form" data-section-form><div class="np-body" data-section-scroll>${insideBefore}${
     fields.map(f=>field(f,values[f.key])).join('')
   }${inside}<p class="fr-create-error" role="alert">${esc(error)}</p></div><button type="submit" class="fr-primary" ${busy?'disabled':''}>${esc(submitLabel)}</button></form>`;
 }
@@ -66,7 +66,7 @@ export function shareScreen(state,categories,plan,step) {
     <div class="fr-budget-bar fr-budget-bar--wide" aria-hidden="true"><span data-share-bar></span></div>
     <div class="np-row fr-share-caption"><span>Распределено</span><span data-share-total></span></div>
     <div class="np-row fr-share-basis"><span>План доходов</span>${moneyLabel(plan)}</div>
-    ${state.single?'<p class="fr-share-room" data-share-room hidden></p>':''}
+    ${state.single?'<p class="fr-share-room" data-share-room></p>':''}
     <p class="fr-create-error" data-share-error role="status"></p>
   </div>`+body(categories.map(c=>`<div class="fr-share-panel">
     ${state.single?'':link(c.name,'share-detail',c.id)}
@@ -78,19 +78,46 @@ export function shareScreen(state,categories,plan,step) {
     primary(state.single && state.parentDraft?'Готово':'Сохранить','section-save-share');
 }
 
-export function goalCard(goal,history=false) {
-  const progress = goal.target ? Math.min(100,goal.accumulated/goal.target*100) : 0;
-  if (!history) return `<button type="button" class="fr-goal-preview" data-section-action="goal" data-id="${esc(goal.categoryId)}">
+export function goalCard(goal) {
+  return `<button type="button" class="fr-goal-preview" data-section-action="goal" data-id="${esc(goal.categoryId)}">
     <span class="fr-goal-heading"><strong>${esc(goal.name)}</strong>${icon('next')}</span>
     ${goalProgress(goal)}
     <span class="fr-goal-available">${small('Доступно потратить')}${moneyLabel(goal.remaining)}</span>
     ${goal.due?small(dateText(goal.due)):''}
   </button>`;
-  return panel((history?`<h2 class="fr-section-title">${esc(goal.name)}</h2>`:link(goal.name,'goal',goal.categoryId))+
-    (goal.due?small(dateText(goal.due)):'')+pair('Цель',goal.target)+pair('Накоплено',goal.accumulated)+
-    `<div class="fr-budget-bar"><span style="width:${progress}%"></span></div>`+
-    pair('Потрачено',goal.spent)+pair('Доступно потратить',goal.remaining)+
-    (history?small('Цель достигнута · '+dateText(goal.date)):pair('До цели',Math.max(0,goal.target-goal.accumulated))));
+}
+
+const compactDateFormat = new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short',year:'numeric'});
+const compactDate = date => compactDateFormat.format(new Date(date+'T12:00:00')).replace(/ г\.$/,'');
+const closureOutcome = goal => goal.spent?'Накоплено и потрачено':'Накоплено';
+
+export function closedGoalCard(goal) {
+  return `<button type="button" class="fr-goal-preview fr-closed-goal-preview" data-section-action="closed-goal" data-id="${esc(goal.categoryId)}">
+    <span class="fr-goal-heading"><strong>${esc(goal.name)}</strong>${icon('next')}</span>
+    ${small('Закрыта · '+compactDate(goal.date))}${moneyLabel(goal.accumulated)}${small(closureOutcome(goal))}
+  </button>`;
+}
+
+export function goalFacts(rows) {
+  return `<dl class="fr-goal-facts">${rows.map(([label,value])=>`<div><dt>${label}</dt><dd>${moneyLabel(value)}</dd></div>`).join('')}</dl>`;
+}
+
+export function closedGoalDetail(goal,history,d,expanded) {
+  const facts = [['Целевая сумма',goal.target],['Из накопленного потрачено',goal.spent]];
+  if (goal.remaining) facts.push(['Возвращено в нераспределённые',goal.remaining]);
+  const records = history.rows.slice().reverse().map(op=>{
+    const category = categoryLabel(d,op.allocations[0]?.categoryId);
+    const title = op.kind==='refund'?'Возврат':category.name||'Расход';
+    const account = d.accounts.find(a=>a.id===op.accountId)?.name;
+    const meta = [compactDate(op.date),account,op.cancelled?'Отменена':''].filter(Boolean).join(' · ');
+    return `<button type="button" class="fr-payment-actions-row" data-operation="${esc(op.id)}" data-cancelled="${!!op.cancelled}">
+      <span>${esc(title)}<small>${esc(meta)}</small></span>${moneyLabel(op.amount)}</button>`;
+  }).join('');
+  return `<section class="fr-goal-total">${small('Цель закрыта')}${moneyLabel(goal.accumulated)}
+    ${small(closureOutcome(goal)+' · '+compactDate(goal.date))}</section>`+
+    '<p class="fr-goal-as-of">На момент закрытия</p>'+goalFacts(facts)+
+    (history.changed?'<p class="fr-muted" role="status">Связанные записи изменены после закрытия. Выше — суммы на дату закрытия.</p>':'')+
+    (records?`<details data-closed-expenses ${expanded?'open':''}><summary>Расходы${icon('down')}</summary>${records}</details>`:'');
 }
 
 export function accountCard(account,balance) {

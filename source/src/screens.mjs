@@ -8,6 +8,7 @@ const paths={
   calendar:'<rect x="4" y="6" width="16" height="15" rx="2"/><path d="M8 3v5m8-5v5M4 11h16"/>',
   account:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>',
   check:'<path d="m5 12 4 4L19 6"/>',
+  ellipsis:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   plus:'<path d="M12 5v14M5 12h14"/>'
 };
 export const icon=name=>`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;

@@ -193,11 +193,13 @@ try{
     await submit();
     await page.getByText('Тестовый отпуск',{exact:true}).waitFor();
     await section('goal').filter({hasText:'Тестовая покупка'}).click();
+    await button('Управление накоплением').click();
     await button('Пополнить').click();
     await fill('amount','200');
     await submit();
     await page.getByText('200 ₽',{exact:true}).first().waitFor();
-    await button('Записать расход').click();
+    await button('Управление накоплением').click();
+    await button('Добавить расход').click();
     await page.keyboard.type('50');
     await button('Далее').click();
     await button('Тестовая покупка').click();
@@ -205,9 +207,9 @@ try{
     await page.locator('[data-account=card]').click();
     await button('Сохранить').click();
     await page.getByText('150 ₽',{exact:true}).waitFor();
+    await button('Управление накоплением').click();
     await button('Цель достигнута').click();
     await button('Цель достигнута').click();
-    await button('История накоплений').click();
     await page.getByText('Тестовая покупка',{exact:true}).waitFor();
     await back();await back();
     await page.locator('[data-menu-group="Учёт"] summary').click();

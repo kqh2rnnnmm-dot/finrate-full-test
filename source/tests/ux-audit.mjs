@@ -96,7 +96,7 @@ async function audit(browser,view,theme,version){
     await shot('category-share');
     if(!before){
       assert.equal(await page.locator('.fr-budget-bar').count(),1);
-      assert.match(await page.locator('[data-share-room]').innerText(),/доступно до/);
+      assert.match(await page.locator('[data-share-room]').innerText(),/Для категории доступно/);
     }
     await back();
     if(!before){

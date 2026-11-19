@@ -142,8 +142,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const room=host.querySelector('[data-share-room]');
     if(room){
       const available=Math.max(0,10000-total+(parsed?.[s.single]||0));
-      room.hidden=total===null||available===free;
-      room.textContent='Для категории доступно до '+available/100+'%';
+      room.textContent='Для категории доступно '+(total===null?'—':available/100+'%');
     }
     host.querySelector('[data-share-bar]').style.width = (total===null?0:Math.min(10000,total)/100)+'%';
     host.querySelector('[data-share-error]').textContent = valid?'':errors.MONTH_PERCENT_TOTAL;
@@ -241,9 +240,14 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       ${icon(after===null?'down':'pencil')}</button></section>`;
   }
 
+  function returnToGoal() {
+    stack.pop();
+    pop();
+  }
+
   function goalForm(goal) {
     const id = goal?.categoryId || uid();
-    form(goal?'Изменить цель':'Новая цель',[text('name','Название'),number('target','Целевая сумма'),
+    form(goal?'Изменить категорию':'Новая цель',[text('name',goal?'Категория':'Название'),number('target',goal?'Сумма цели':'Целевая сумма'),
       day('due','Срок',false),number('share','Доля плана, %',false)],{
       name:goal?.name,target:numeric(goal?.target),due:goal?.due,share:String(budget.rateAt(doc(),id,todayMonth())/100 || '')
     },v=>commit('savings.goal',d=>budget.saveSavingsGoal(d,{
@@ -252,8 +256,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   }
   function assignForm(goal) {
     const id = uid();
-    form('Пополнить накопления',[number('amount','Сумма')],{},
-      v=>commit('savings.assign',d=>budget.assignSavings(d,{id,categoryId:goal.categoryId,date:date(),amount:asAmount(v.amount)})));
+    const {actual,reserved}=budget.availableMoney(doc());
+    form('Пополнить',[{...number('amount','Сумма'),placeholder:'Введите сумму'}],{},
+      v=>commit('savings.assign',d=>budget.assignSavings(d,{id,categoryId:goal.categoryId,date:date(),amount:asAmount(v.amount)}),returnToGoal),
+      {insideBefore:`<h2 class="fr-goal-context">${esc(goal.name)}</h2>${ui.small('Из нераспределённых')}${ui.moneyLabel(Math.max(0,actual-reserved))}`});
   }
 
   function incomeForm(source=null) {
@@ -422,14 +428,30 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'savings': return heading('Накопления','',ui.plus('goal-new','Новая цель'))+
         ui.body(budget.savings(d).filter(g=>!g.closed).map(g=>ui.goalCard(g)).join('')||ui.empty('Целей пока нет.'))+
         `<div class="fr-floating-history">${ui.actionButton('История накоплений','goal-history')}</div>`;
-      case 'goal-history': return list('История накоплений',budget.savings(d).filter(g=>g.closed).map(g=>ui.goalCard(g,true)).reverse().join('')||ui.empty('Завершённых целей пока нет.'));
+      case 'goal-history': {
+        const history=budget.savings(d).filter(g=>g.closed).reverse()
+          .sort((a,b)=>b.date.localeCompare(a.date)||(b.at||'').localeCompare(a.at||''));
+        return list('История накоплений',history.map(ui.closedGoalCard).join('')||ui.empty('Закрытых целей пока нет.'));
+      }
       case 'goal': {
         const goal=budget.savings(d).find(g=>g.categoryId===s.id);
-        return list(goal.name,ui.goalProgress(goal)+ui.panel(ui.pair('Доступно потратить',goal.remaining)+
-          ui.pair('До цели',Math.max(0,goal.target-goal.accumulated))+ui.pair('Потрачено',goal.spent))+
-          ui.actionButton('Пополнить','goal-assign')+ui.actionButton('Записать расход','goal-expense')+
-          ui.actionButton('Изменить цель','goal-edit')+ui.actionButton('Цель достигнута','goal-close')+
-          ui.link('Расходы цели','category-ops',goal.categoryId));
+        const manage=`<button type="button" class="fr-category-new" data-section-action="goal-manage"
+          aria-label="Управление накоплением">${icon('ellipsis')}</button>`;
+        return list(goal.name,`<section class="fr-goal-total">${ui.small('Доступно потратить')}${ui.moneyLabel(goal.remaining)}
+          ${ui.small('Цель '+amountText(goal.target))}</section>
+          <progress class="fr-goal-detail-progress" max="${goal.target}" value="${Math.min(goal.target,goal.accumulated)}" aria-label="Прогресс накопления"></progress>`+
+          ui.goalFacts([['Всего накоплено',goal.accumulated],['Из этого потрачено',goal.spent],['До цели',Math.max(0,goal.target-goal.accumulated)]])+
+          ui.link('Расходы цели','category-ops',goal.categoryId),manage);
+      }
+      case 'goal-manage': {
+        const goal=budget.savings(d).find(g=>g.categoryId===s.id);
+        return list('Управление',`<div class="fr-goal-management"><h2 class="fr-goal-context">${esc(goal.name)}</h2>`+
+          ui.actionButton('Пополнить','goal-assign')+ui.actionButton('Добавить расход','goal-expense')+
+          ui.actionButton('Изменить категорию','goal-edit')+ui.actionButton('Цель достигнута','goal-close')+'</div>');
+      }
+      case 'closed-goal': {
+        const goal=budget.savings(d).find(g=>g.categoryId===s.id);
+        return list(goal.name,ui.closedGoalDetail(goal,budget.closedSavingsOperations(d,goal),d,s.expanded));
       }
       case 'accounts': {
         const balances=ledger.fact().balances, active=s.tab!=='archive';
@@ -615,7 +637,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       `<div class="fr-credit-due-row">${ui.pair('До '+dateText(day),amount)}${day<date()?'<span class="fr-overdue">Просрочено</span>':''}</div>`).join('')+
       (credit.unknown?ui.pair('Без срока',credit.unknown):'')+
       (credit.statementCurrent?ui.pair('По выписке до '+dateText(credit.dueDate),credit.due):'')+
-      (a.archived||!credit.debt?'':ui.actionButton('Указать сумму по выписке','credit-statement'));
+      (a.archived?'':ui.actionButton('Указать сумму по выписке','credit-statement'));
     const nextDue=[...byDate.keys(),...(credit.statementCurrent&&credit.due>0?[credit.dueDate]:[])].sort()[0];
     const debt=credit.debt?`${ui.small('Долг')}<button type="button" class="fr-credit-main-debt" data-section-action="credit-repay"
       aria-label="Погасить весь долг" ${a.archived?'disabled':''}>${amountText(credit.debt)}</button>
@@ -758,13 +780,15 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         return startOperation(c.type,{categoryId:c.id,categoryRoot:c.parentId||c.id});
       }
       case 'goal': return enter(name,{id});
+      case 'goal-manage': return enter(name,{id:s.id});
+      case 'closed-goal': return enter(name,{id});
       case 'goal-new': return goalForm();
       case 'goal-history': return enter(name);
       case 'goal-edit': return goalForm(budget.savings(doc()).find(g=>g.categoryId===s.id));
       case 'goal-assign': return assignForm(budget.savings(doc()).find(g=>g.categoryId===s.id));
-      case 'goal-expense': return startOperation('expense',{categoryId:s.id,categoryRoot:s.id});
+      case 'goal-expense': return startOperation('expense',{categoryId:s.id,categoryRoot:s.id,onSaved:pop});
       case 'goal-close': return confirm('Цель достигнута?', 'Цель появится в истории накоплений. Оставшиеся деньги снова доступны.', 'Цель достигнута',
-        'savings.close',d=>budget.closeSavings(d,s.id,date()),()=>{stack.pop();pop();});
+        'savings.close',d=>budget.closeSavings(d,s.id,date()),()=>{stack.splice(-3,3,{page:'goal-history',scroll:0,error:''});redraw();});
       case 'account': case 'account-history': return enter(name,{id});
       case 'account-new': return newAccount();
       case 'account-transfer': return transferForm(s.id);
@@ -1020,6 +1044,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       enter(page,{month:todayMonth(),query:'',tab:page==='categories'?'expense':'due',selected:[],...props});
     },
     openRecord(id) {
+      if (state()?.page==='closed-goal') state().expanded=host.querySelector('[data-closed-expenses]')?.open;
       const o=doc().operations.find(o=>o.id===id);
       if (o.kind==='transfer'||o.kind==='adjustment') {
         enter(o.kind==='transfer'?'transfer-record':'adjustment',{id});

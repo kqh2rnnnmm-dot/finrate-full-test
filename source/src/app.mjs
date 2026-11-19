@@ -17,6 +17,7 @@ const parseMonth=date=>{const [year,month]=date.slice(0,7).split('-').map(Number
 let route='home', menuGroup=null, menuScroll=0, draft=null, previous=null, initial=null, origin='home', originScroll=0, editing=false;
 let buffer='', query='', operationQuery='', categoryForm=null, showCreate=false;
 let calendar=parseMonth(localDate());
+let onOperationSaved;
 let sectionParent='home', sectionScroll=0, categoryRoot='', fixedAccount='';
 let operationFilters={}, pendingFilters={}, filterQuery='', filterScroll=0;
 let note='', error='', busy=false, leave=null;
@@ -24,7 +25,7 @@ let note='', error='', busy=false, leave=null;
 const doc=ledger.document;
 const listNode=()=>host.querySelector('.fr-operation-list,.np-body');
 function move(to) { route=to;render(); }
-function resetDraft(){categoryRoot='';fixedAccount='';draft=null;previous=null;initial=null;editing=false;error='';leave=null;}
+function resetDraft(){onOperationSaved=null;categoryRoot='';fixedAccount='';draft=null;previous=null;initial=null;editing=false;error='';leave=null;}
 const sectionRoutes=new Set(['summary','accounts','categories','transfer','payments','income-plans','savings','budget-settings']);
 const sections=createSections(host,{
   redraw:()=>move('section'),
@@ -55,6 +56,7 @@ const isDirty=()=>JSON.stringify(draft)!==initial;
 function start(kind,context={}){
   resetDraft();
   origin=route;originScroll=listNode()?.scrollTop||0;
+  onOperationSaved=context.onSaved;
   categoryRoot=context.categoryRoot||'';fixedAccount=context.accountId||'';
   draft={id:uid(),kind,amount:'',categoryId:context.categoryId||'',date:localDate(),accountId:fixedAccount,note:'',creditDueDate:''};
   initial=JSON.stringify(draft);buffer='';move('amount');
@@ -200,7 +202,14 @@ function enterKey(key){
 async function save(){
   if(busy||previous?.cancelled)return;
   busy=true;error='';render();
-  try{await ledger.save(draft,previous);return finish();}
+  try{
+    await ledger.save(draft,previous);
+    if(!onOperationSaved)return finish();
+    const done=onOperationSaved;
+    busy=false;
+    resetDraft();
+    return done();
+  }
   catch(cause){
     error={
       INSUFFICIENT_FUNDS:'На выбранном счёте недостаточно средств.',

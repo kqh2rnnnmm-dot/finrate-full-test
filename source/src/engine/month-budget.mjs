@@ -43,7 +43,12 @@ export function validateMonthBudget(d) {
     if (!categories.has(g.categoryId) || goals.has(g.categoryId) || !positive(g.target) ||
         !validDate(g.start) || g.due && !validDate(g.due) ||
         g.closed && (!validDate(g.closed.date) || !g.closed.name ||
+          g.closed.at !== undefined && (typeof g.closed.at !== 'string' || !Number.isFinite(Date.parse(g.closed.at))) ||
           ![g.closed.accumulated,g.closed.spent,g.closed.remaining].every(n => Number.isSafeInteger(n) && n >= 0))) fail('MONTH_SCHEMA');
+    const refs = g.closed?.operationRefs;
+    if (refs !== undefined && (!Array.isArray(refs) ||
+        refs.some(ref=>!ref || typeof ref.id !== 'string' || !ref.id || typeof ref.facts !== 'string') ||
+        new Set(refs.map(ref=>ref.id)).size !== refs.length)) fail('MONTH_SCHEMA');
     goals.add(g.categoryId);
   }
   const requests = new Set();
@@ -127,13 +132,31 @@ export function assignSavings(d, entry) {
   budget.assignments.push(entry);
 }
 
+const operationFacts = op => JSON.stringify([
+  op.kind, op.date, op.amount, op.accountId, !!op.cancelled, !!op.pending,
+  op.allocations.map(({categoryId,amount})=>[categoryId,amount])
+]);
+
+export function closedSavingsOperations(d,goal) {
+  if (!goal.closed.operationRefs) return {rows:[],changed:false};
+  const byId = new Map(d.operations.map(op=>[op.id,op]));
+  const pairs = goal.closed.operationRefs.map(ref=>[ref,byId.get(ref.id)]);
+  return {
+    rows:pairs.map(([,op])=>op).filter(Boolean),
+    changed:pairs.some(([ref,op])=>!op || operationFacts(op)!==ref.facts)
+  };
+}
+
 export function closeSavings(d,id,date) {
   const goal = write(d).goals.find(g=>g.categoryId===id);
   if (!goal) fail('MONTH_GOAL');
   if (goal.closed) return false;
   if (date < goal.start) fail('MONTH_DATE');
   const {name,accumulated,spent,remaining} = savings(d).find(g=>g.categoryId===id);
-  goal.closed = {name,accumulated,spent,remaining,date};
+  const operationRefs = d.operations.filter(op=>!op.pending && ['expense','refund'].includes(op.kind) &&
+    op.date>=goal.start && op.allocations.some(a=>categoryRoot(d,a.categoryId)===id))
+    .map(op=>({id:op.id,facts:operationFacts(op)}));
+  goal.closed = {name,accumulated,spent,remaining,date,at:new Date().toISOString(),operationRefs};
   saveShares(d,date.slice(0,7),{[id]:0});
 }
 
