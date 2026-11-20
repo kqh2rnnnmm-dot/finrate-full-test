@@ -76,11 +76,9 @@
 #finrate .fr-menu-accordion>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:64px;padding:16px 4px;color:var(--ink);font-size:19px;line-height:1.35;font-weight:650;user-select:none;-webkit-user-select:none}
 #finrate .fr-menu-accordion>summary::-webkit-details-marker{display:none}
 #finrate .fr-menu-accordion>summary::marker{content:''}
-#finrate .fr-fold{position:relative;width:18px;height:18px;flex-shrink:0;color:var(--dim)}
-#finrate .fr-fold:before, #finrate .fr-fold:after{content:'';position:absolute;background:currentColor;border-radius:2px}
-#finrate .fr-fold:before{width:14px;height:2px;left:2px;top:8px}
-#finrate .fr-fold:after{width:2px;height:14px;left:8px;top:2px}
-#finrate .fr-menu-accordion[open] .fr-fold:after{display:none}
+#finrate .fr-fold{display:grid;place-items:center;width:18px;height:18px;flex:none;color:var(--dim)}
+#finrate .fr-fold svg{width:18px;height:18px}
+#finrate .fr-menu-accordion[open] .fr-fold svg{transform:rotate(180deg)}
 #finrate .fr-menu-children{padding:0 0 12px 16px}
 #finrate .fr-menu-item{font-size:17px;line-height:1.4;font-weight:600;padding:12px 4px;min-height:52px}
 #finrate .fr-menu-accordion>summary:active{color:var(--palette-12)}
@@ -597,3 +595,39 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate [data-closed-expenses] button[data-cancelled=true]{color:var(--dim)}
 
 #finrate [data-section-page] .fr-goal-context+.fr-muted+.np-money{display:block;margin:6px 0 30px;font-size:25px}
+
+#finrate .fr-category-meter{position:relative}
+#finrate .fr-category-meter>span{position:absolute;inset:0 auto 0 0;border-radius:inherit}
+#finrate .fr-category-meter .fr-meter-funding{background:#a9cdef}
+#finrate .fr-category-meter .fr-meter-spent{background:#fdfdff}
+#finrate .fr-category-meter.fr-meter-over{background:#bf424c}
+#finrate .fr-typed-account.fr-main-account-row{border-radius:18px;background:var(--panel);padding-inline:12px;box-shadow:none}
+#finrate .fr-expense-picker-group{margin-bottom:12px;padding:0 12px 8px;background:var(--panel);border-radius:16px}
+#finrate .fr-expense-picker-group .fr-operation-picker-child{border-inline-start:2px solid var(--line);margin-inline-start:12px;width:calc(100% - 12px);padding-inline-start:10px;font-size:15px}
+#finrate .fr-picker-budget{font-size:13px;color:var(--dim);margin:0 0 8px}
+#finrate .fr-picker-budget strong{float:inline-end}
+#finrate .fr-picker-budget .fr-budget-bar{clear:both;margin:8px 0}
+#finrate .fr-picker-budget small{color:var(--red)}
+#finrate .fr-month-result{text-align:center;padding:12px 0 20px;color:var(--ink)}
+#finrate .fr-month-result>div{display:flex;justify-content:center;align-items:center;gap:4px;color:var(--dim)}
+#finrate .fr-month-result button{width:44px;height:44px;display:grid;place-items:center;border:0;background:transparent;color:inherit}
+#finrate .fr-month-result button svg{width:18px;height:18px}
+#finrate [data-section-page] .fr-month-result>.np-money{display:block;font-size:clamp(28px,8vw,40px);line-height:1.15;white-space:normal;overflow-wrap:anywhere}
+#finrate .fr-info-dialog{width:min(320px,calc(100% - 40px));padding:0;border:0;border-radius:20px;background:var(--panel);color:var(--ink)}
+#finrate .fr-info-dialog::backdrop{background:#0004;touch-action:none}
+#finrate .fr-info-panel{padding:20px;outline:none}
+#finrate .fr-info-panel p{margin:8px 0 0;line-height:1.45}
+#finrate .fr-form-account{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;min-height:48px;padding:10px 15px;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);text-align:left}
+#finrate .fr-form-account-copy{display:grid;min-width:0;gap:4px;overflow-wrap:anywhere}
+#finrate .fr-form-account>svg{width:18px;height:18px;display:block}
+#finrate .fr-funds-warning{margin-bottom:12px;padding:12px;border-radius:14px;background:var(--panel);font-size:14px}
+#finrate .fr-funds-warning button{display:block;margin-top:6px}
+#finrate .fr-category-tab-island{touch-action:pan-y}
+#finrate .fr-category-tab-island button{min-width:0;white-space:normal;padding-inline:4px}
+#finrate :is(.np-link,.fr-transfer-choice,.fr-category-fold) svg{flex:none;align-self:center}
+
+@media(prefers-color-scheme:dark){
+  #finrate .fr-category-meter .fr-meter-funding{background:#54799e}
+  #finrate .fr-category-meter .fr-meter-spent{background:#e2e6ef}
+  #finrate .fr-category-meter.fr-meter-over{background:#f3747c}
+}

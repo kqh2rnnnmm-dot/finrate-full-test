@@ -1,7 +1,8 @@
-import {accountMark, amountText, dateText, esc, heading, icon, monthHeader, primary, categoryLabel, operationRows} from './screens.mjs';
+import {accountMark, amountText, dateText, esc, heading, icon, monthHeader, primary, categoryLabel, operationRows, budgetBar} from './screens.mjs';
 
 export const link = (label, action, id='', detail='') =>
   `<button type="button" class="np-link" data-section-action="${action}" data-id="${esc(id)}"><span><span class="fr-section-name" data-full-name>${esc(label)}</span>${detail}</span>${icon('next')}</button>`;
+export {budgetBar};
 export const small = value => `<small class="fr-muted">${esc(value)}</small>`;
 export const moneyLabel = value => `<strong class="np-money">${amountText(value)}</strong>`;
 export const pair = (label,value) => `<div class="np-row"><span>${esc(label)}</span>${moneyLabel(value)}</div>`;
@@ -15,6 +16,12 @@ export const tabs = (items,current) => `<div class="fr-section-tabs">${items.map
 const decimal = value => String(value ?? '').replace('.',',');
 const option = (value,label,selected) => `<option value="${esc(value)}" ${String(selected)===String(value)?'selected':''}>${esc(label)}</option>`;
 export function field({key,label,type='text',options,placeholder='',required=true,maxlength=100},value) {
+  if(type==='account-picker'){
+    const account=options.find(([id])=>id===value&&id);
+    const [id,name,mark]=account||[];
+    return `<div class="fr-section-field"><span>${esc(label)}</span><button type="button" class="fr-form-account" data-section-action="form-account" aria-label="Счёт: ${esc(name||'Выбрать счёт')}">
+      <span class="fr-form-account-copy"><strong>${esc(name||'Выбрать счёт')}</strong>${id?mark:''}</span>${icon('next')}</button></div>`;
+  }
   const control = options
     ? `<select name="${key}" ${required?'required':''}>${options.map(([id,label])=>option(id,label,value)).join('')}</select>`
     : type==='checkbox'
@@ -34,22 +41,19 @@ export function monthControl(month) {
     .replaceAll('data-month=', 'data-section-action="month" data-id=');
 }
 
-export function budgetBar(plan,spent) {
-  const scale = Math.max(plan,spent,1);
-  return `<div class="fr-budget-bar fr-budget-bar--wide" role="img" aria-label="План ${esc(amountText(plan))}, расход ${esc(amountText(spent))}"><span style="width:${Math.min(plan,spent)/scale*100}%"></span>${spent>plan?`<span class="fr-budget-over" style="width:${(spent-plan)/scale*100}%"></span>`:''}</div>`;
-}
 export function amountOverview(value,{label='',caption=''}={}) {
   return `<div class="fr-amount-overview">${label?small(label):''}${moneyLabel(value)}${caption?small(caption):''}</div>`;
 }
 
 export function summary(month, budget) {
   return heading('Сводка','',`<button type="button" class="fr-category-new" data-section-action="budget-settings" aria-label="Настройки сводки">${icon('settings')}</button>`)+monthControl(month)+body(
-    amountOverview(budget.result,{label:'Результат месяца'})+
+    `<div class="fr-month-result"><div>Результат месяца <button type="button" data-action="month-result-info" aria-label="Как считается результат месяца" aria-haspopup="dialog">${icon('info')}</button></div>${moneyLabel(budget.result)}</div>
+      <dialog class="fr-info-dialog" aria-label="Результат месяца"><div class="fr-info-panel" tabindex="-1" autofocus><strong>Результат месяца</strong>
+      <p>Доходы минус расходы.${budget.excludeSavings?' Деньги, оставшиеся в накоплениях за месяц, вычитаются.':' Накопления входят в результат.'}</p></div></dialog>`+
     `<div class="fr-summary-links">${link('Получено','received','',moneyLabel(budget.income))+
-      link('Можно тратить','money')+link('Накопления','savings')}</div>`+
-    budget.categories.map(c=>`<div class="fr-summary-category">${link(c.name,'share',c.id,(c.plan||c.spent)?moneyLabel(c.spent):'')}
-      ${(c.plan||c.spent)?budgetBar(c.plan,c.spent)+small('План '+amountText(c.plan)):small('Без плана и расходов')}
-      ${c.spent>c.plan?`<p class="fr-over-budget">Бюджет превышен на ${amountText(c.spent-c.plan)}</p>`:''}</div>`).join('')
+      pair('Ожидалось по плану',budget.expected)+pair('Получено по плану',budget.planned)+pair('Дополнительный доход',budget.additional)+link('Накопления','savings')}</div>`+
+    budget.categories.filter(c=>!c.savings).map(c=>`<div class="fr-summary-category">${link(c.name,'share',c.id,moneyLabel(c.spent))}
+      ${budgetBar(c.plan,c.spent,c.funded)+small('План '+amountText(c.plan))}</div>`).join('')
   );
 }
 
@@ -65,7 +69,7 @@ export function shareScreen(state,categories,plan,step) {
     <div class="np-row fr-share-free"><span>Свободно к распределению</span><strong data-share-free></strong></div>
     <div class="fr-budget-bar fr-budget-bar--wide" aria-hidden="true"><span data-share-bar></span></div>
     <div class="np-row fr-share-caption"><span>Распределено</span><span data-share-total></span></div>
-    <div class="np-row fr-share-basis"><span>План доходов</span>${moneyLabel(plan)}</div>
+    <div class="np-row fr-share-basis"><span>Свободно по плану</span><strong class="np-money" data-share-free-amount></strong></div>
     ${state.single?'<p class="fr-share-room" data-share-room></p>':''}
     <p class="fr-create-error" data-share-error role="status"></p>
   </div>`+body(categories.map(c=>`<div class="fr-share-panel">
@@ -120,8 +124,8 @@ export function closedGoalDetail(goal,history,d,expanded) {
     (records?`<details data-closed-expenses ${expanded?'open':''}><summary>Расходы${icon('down')}</summary>${records}</details>`:'');
 }
 
-export function accountCard(account,balance) {
-  return `<button type="button" class="fr-typed-account fr-account-list-item" data-section-action="account" data-id="${esc(account.id)}">
+export function accountCard(account,balance,primaryAccount=false) {
+  return `<button type="button" class="fr-typed-account fr-account-list-item ${primaryAccount?'fr-main-account-row':''}" data-section-action="account" data-id="${esc(account.id)}">
     <span class="fr-typed-account-name">${accountMark(account,false)}<strong>${esc(account.name)}</strong></span>
     ${moneyLabel(balance)}</button>`;
 }

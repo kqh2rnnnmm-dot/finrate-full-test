@@ -4,7 +4,7 @@ import * as ledger from './ledger.mjs';
 import {createSections} from './section-controller.mjs';
 import {recordHistory, recordRows, field} from './sections.mjs';
 import * as screen from './screens.mjs';
-import {categoryRoot as rootCategory, monthlyOverview} from './engine/month-budget.mjs';
+import {categoryRoot as rootCategory, monthlyOverview,primaryAccount,expenseShortfall} from './engine/month-budget.mjs';
 import {localDate} from './engine/operations.mjs';
 import {money,uid} from './engine/model.mjs';
 import {bindMenuGlyph,bindTrack} from './motion.mjs';
@@ -20,12 +20,12 @@ let calendar=parseMonth(localDate());
 let onOperationSaved;
 let sectionParent='home', sectionScroll=0, categoryRoot='', fixedAccount='';
 let operationFilters={}, pendingFilters={}, filterQuery='', filterScroll=0;
-let note='', error='', busy=false, leave=null;
+let note='', error='', busy=false, leave=null, accountChoice='';
 
 const doc=ledger.document;
 const listNode=()=>host.querySelector('.fr-operation-list,.np-body');
 function move(to) { route=to;render(); }
-function resetDraft(){onOperationSaved=null;categoryRoot='';fixedAccount='';draft=null;previous=null;initial=null;editing=false;error='';leave=null;}
+function resetDraft(){onOperationSaved=null;categoryRoot='';fixedAccount='';accountChoice='';draft=null;previous=null;initial=null;editing=false;error='';leave=null;}
 const sectionRoutes=new Set(['summary','accounts','categories','transfer','payments','income-plans','savings','budget-settings']);
 const sections=createSections(host,{
   redraw:()=>move('section'),
@@ -58,7 +58,7 @@ function start(kind,context={}){
   origin=route;originScroll=listNode()?.scrollTop||0;
   onOperationSaved=context.onSaved;
   categoryRoot=context.categoryRoot||'';fixedAccount=context.accountId||'';
-  draft={id:uid(),kind,amount:'',categoryId:context.categoryId||'',date:localDate(),accountId:fixedAccount,note:'',creditDueDate:''};
+  draft={id:uid(),kind,amount:'',categoryId:context.categoryId||'',date:localDate(),accountId:fixedAccount||primaryAccount(doc())?.id||'',note:'',creditDueDate:''};
   initial=JSON.stringify(draft);buffer='';move('amount');
 }
 function operationsScreen(){
@@ -126,6 +126,18 @@ function selectedCategory(id){
   if(editing)showReview();else openCalendar();
 }
 function showReview(){editing=false;move('review');}
+function openAccountSelection(){
+  accountChoice=draft.accountId;
+  move('account');
+}
+function selectedAccountWarning(){
+  if(draft.kind!=='expense'||!accountChoice)return {};
+  const d=doc(),account=d.accounts.find(a=>a.id===accountChoice&&!a.archived), balances=ledger.fact().balances;
+  const shortfall=expenseShortfall(account,balances[accountChoice],money(draft.amount),previous);
+  const transfer=shortfall>0&&account?.financeType!=='credit'&&d.accounts.some(a=>!a.archived&&a.financeType!=='credit'&&
+    a.id!==accountChoice&&balances[a.id]>0);
+  return {shortfall,transfer};
+}
 function chooseAccount(id){
   if(draft.accountId!==id) draft.creditDueDate='';
   draft.accountId=id;
@@ -161,14 +173,14 @@ function back(){
     case 'date':
       if(editing)return showReview();
       return openCategory();
-    case 'credit-date': return editing?showReview():fixedAccount?openCalendar():move('account');
+    case 'credit-date': return editing?showReview():fixedAccount?openCalendar():openAccountSelection();
     case 'account':
       if(editing)return showReview();
       return openCalendar();
     case 'review':
       if(previous&&isDirty())return getLeave(finish);
       if(previous)return finish();
-      return fixedAccount?openCalendar():move('account');
+      return fixedAccount?openCalendar():openAccountSelection();
     case 'note':
       if(note!==draft.note&&!previous?.cancelled)return getLeave(showReview);
       return showReview();
@@ -185,7 +197,7 @@ function edit(field){
   if(field==='amount'){buffer=draft.amount;move('amount');}
   if(field==='date')openCalendar();
   if(field==='category')openCategory();
-  if(field==='account'&&!fixedAccount)move('account');
+  if(field==='account'&&!fixedAccount)openAccountSelection();
   if(field==='credit-date'){calendar=parseMonth(draft.creditDueDate||draft.date);move('credit-date');}
   if(field==='note'){note=draft.note;move('note');}
 }
@@ -212,12 +224,15 @@ async function save(){
   }
   catch(cause){
     error={
+      CREDIT_LIMIT:'На выбранном счёте недостаточно средств.',
       INSUFFICIENT_FUNDS:'На выбранном счёте недостаточно средств.',
       STALE:'Данные изменились в другой вкладке. Откройте приложение заново.',
       EDIT_STALE:'Запись изменилась. Откройте её заново.',
       STORAGE_QUOTA_ABORTED:'Недостаточно места на устройстве. Операция не записана.'
     }[cause.code]||'Не удалось сохранить. Проверьте сумму, дату и счёт.';
-    busy=false;render();
+    busy=false;
+    if(['CREDIT_LIMIT','INSUFFICIENT_FUNDS'].includes(cause.code)&&!fixedAccount){editing=true;return openAccountSelection();}
+    render();
   }
 }
 async function cancel(){
@@ -262,11 +277,37 @@ function action(id){
     case 'filter-category':
       filterQuery='';return move('filter-picker');
     case 'section-save-share': case 'transfer-accept': return sections.action(id);
+    case 'account-next':
+      if(route!=='account'||selectedAccountWarning().shortfall||
+        !doc().accounts.some(a=>a.id===accountChoice&&!a.archived&&(draft.kind!=='income'||a.financeType!=='credit')))return;
+      return chooseAccount(accountChoice);
+    case 'fund-expense': {
+      const warning=selectedAccountWarning();
+      if(route==='account'&&warning.transfer)sections.fundExpense(accountChoice,warning.shortfall,()=>move('account'));
+      return;
+    }
+    case 'month-result-info': {
+      const dialog=host.querySelector('.fr-info-dialog');
+      const trigger=host.querySelector('[data-action=month-result-info]');
+      if(!dialog||dialog.open)return;
+      let start=null;
+      dialog.onpointerdown=event=>{start=event.target===dialog?[event.clientX,event.clientY]:null;};
+      dialog.onpointercancel=()=>{start=null;};
+      dialog.onpointerup=event=>{
+        const moved=start&&Math.hypot(event.clientX-start[0],event.clientY-start[1])>24;
+        start=null;
+        if(moved&&event.target===dialog)setTimeout(()=>{if(dialog.open)dialog.close();},300);
+      };
+      dialog.onclick=event=>{if(event.target===dialog){event.stopPropagation();dialog.close();}};
+      dialog.addEventListener('close',()=>trigger.blur(),{once:true});
+      dialog.showModal();
+      return;
+    }
     case 'first-account':
       return sections.newAccount({
         kind:draft.kind,
         exit:()=>move('account'),
-        created:id=>chooseAccount(id)
+        created:id=>{accountChoice=id;move('account');}
       });
     case 'next':
       if(!validAmount(buffer))return;
@@ -302,13 +343,13 @@ function render(){
     case 'amount':
       markup=screen.keypad(draft.kind,buffer,validAmount(buffer));
       break;
-    case 'category': markup=screen.categoryPicker(doc(),draft,query,showCreate,categoryRoot);break;
+    case 'category': markup=screen.categoryPicker(doc(),draft,query,showCreate,categoryRoot,money(draft.amount),previous);break;
     case 'category-new':
       markup=screen.createCategoryScreen(categoryForm,doc().categories.filter(c=>c.type===draft.kind&&!c.parentId&&!c.archived&&!c.mergedInto));break;
     case 'date': markup=screen.calendar(draft.kind,calendar.getFullYear(),calendar.getMonth(),draft.date,localDate());break;
     case 'credit-date': markup=screen.calendar(draft.kind,calendar.getFullYear(),calendar.getMonth(),draft.creditDueDate,localDate(),'Срок погашения');break;
     case 'account':
-      markup=screen.accounts(doc(),ledger.fact().balances,draft?.accountId,draft.kind);break;
+      markup=screen.accounts(doc(),ledger.fact().balances,accountChoice,draft.kind,selectedAccountWarning());break;
     case 'review': {
       const rootId=rootCategory(doc(),draft.categoryId);
       const category=draft.kind==='expense'&&monthlyOverview(doc(),draft.date.slice(0,7)).categories.find(c=>c.id===rootId);
@@ -383,16 +424,16 @@ host.addEventListener('click',event=>{
   if(data.date){
     if(route==='credit-date'){draft.creditDueDate=data.date;return showReview();}
     draft.date=data.date;
-    return editing?showReview():fixedAccount?chooseAccount(fixedAccount):move('account');
+    return editing?showReview():fixedAccount?chooseAccount(fixedAccount):openAccountSelection();
   }
-  if(data.account)return chooseAccount(data.account);
+  if(data.account&&route==='account'){accountChoice=data.account;return render();}
   if(data.operation)return selectRecord(data.operation);
 });
 host.addEventListener('input',event=>{
   const input=event.target;
   if(input.hasAttribute('data-search-category')){
     query=input.value;
-    host.querySelector('[data-category-results]').innerHTML=screen.categoryRows(doc(),draft.kind,draft.categoryId,query,categoryRoot);
+    host.querySelector('[data-category-results]').innerHTML=screen.categoryRows(doc(),draft.kind,draft.categoryId,query,categoryRoot,draft.date,money(draft.amount),previous);
   }
   if(input.hasAttribute('data-search-operation')){
     operationQuery=input.value;
@@ -425,21 +466,30 @@ menuButton.onclick=()=>move(route==='menu'?'home':'menu');
 root.addEventListener('pointerdown',event=>{
   if(route==='menu'&&!event.target.closest('.fr-menu-list,.fr-persistent-menu,.fr-back'))move('home');
 });
-let touchStart=null;
+let touchStart=null,categoryTouch=null;
 host.addEventListener('touchstart',event=>{
   touchStart=route==='menu'&&event.touches.length===1?event.touches[0]:null;
+  categoryTouch=route==='section'&&event.touches.length===1&&event.target.closest('.fr-category-tab-island')?event.touches[0]:null;
 },{passive:true});
 host.addEventListener('touchend',event=>{
+  const end=event.changedTouches[0];
+  if(categoryTouch&&end&&route==='section'){
+    const dx=end.clientX-categoryTouch.clientX,dy=end.clientY-categoryTouch.clientY;
+    if(Math.abs(dx)>28&&Math.abs(dx)>Math.abs(dy)*1.5){
+      event.preventDefault();sections.categorySwipe(dx<0?1:-1);
+    }
+  }
+  categoryTouch=null;
   if(touchStart&&route==='menu'){
     const end=event.changedTouches[0];
     if(end&&end.clientX-touchStart.clientX>60&&end.clientX-touchStart.clientX>Math.abs(end.clientY-touchStart.clientY)*1.5)move('home');
   }
   touchStart=null;
-},{passive:true});
+},{passive:false});
 
 document.addEventListener('keydown',event=>{
   if(!doc())return;
-  if(event.key==='Escape'){event.preventDefault();return back();}
+  if(event.key==='Escape'){if(host.querySelector('dialog[open]'))return;event.preventDefault();return back();}
   if(!['amount','section'].includes(route)||!host.querySelector('.fr-keypad')||event.metaKey||event.ctrlKey||event.altKey||event.target.matches('input,textarea'))return;
   if(/^\d$/.test(event.key)||[',','.','Backspace'].includes(event.key)){
     event.preventDefault();enterKey(event.key==='Backspace'?'backspace':event.key==='.'?',':event.key);

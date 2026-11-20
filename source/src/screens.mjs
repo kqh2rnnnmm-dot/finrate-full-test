@@ -1,4 +1,7 @@
+import {monthlyOverview} from './engine/month-budget.mjs';
+
 const paths={
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
   down:'<path d="m6 9 6 6 6-6"/>',
   swap:'<path d="m21 16-4 4-4-4m4 4V4M3 8l4-4 4 4M7 4v16"/>',
   settings:'<path d="M9 6h11m-9 6h9m-5 6h5M4 6h1m-1 6h3m-3 6h7"/><circle cx="7" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="18" r="2"/>',
@@ -37,7 +40,7 @@ const groups=[
   ['Настройки и помощь',[['Настройки сводки','budget-settings']]]
 ];
 export function menu(open) {
-  return heading('Меню')+`<nav id="fr-menu-panel" class="fr-menu-list" aria-label="Разделы FinRate">${groups.map(([title,items])=>`<details class="fr-menu-accordion" data-menu-group="${esc(title)}" ${open===title?'open':''}><summary>${esc(title)}<span class="fr-fold" aria-hidden="true"></span></summary><div class="fr-menu-children">${items.map(([label,action])=>`<button type="button" class="fr-menu-item" data-action="${action}">${label}</button>`).join('')}</div></details>`).join('')}</nav>`;
+  return heading('Меню')+`<nav id="fr-menu-panel" class="fr-menu-list" aria-label="Разделы FinRate">${groups.map(([title,items])=>`<details class="fr-menu-accordion" data-menu-group="${esc(title)}" ${open===title?'open':''}><summary>${esc(title)}<span class="fr-fold" aria-hidden="true">${icon('down')}</span></summary><div class="fr-menu-children">${items.map(([label,action])=>`<button type="button" class="fr-menu-item" data-action="${action}">${label}</button>`).join('')}</div></details>`).join('')}</nav>`;
 }
 
 export function keypad(kind,buffer,valid,title=labels[kind],next='next') {
@@ -49,22 +52,36 @@ export function enteredMoney(buffer){
   return ruNumber.format(Number(whole))+(fraction===undefined?'':','+fraction)+' ₽';
 }
 
-export function categoryRows(doc,kind,chosen,query,locked='') {
+export function budgetBar(plan,spent,funded=0) {
+  const scale=Math.max(plan,spent,1);
+  return `<div class="fr-budget-bar fr-budget-bar--wide fr-category-meter ${spent>plan?'fr-meter-over':''}" role="img"
+    aria-label="План ${amountText(plan)}, расход ${amountText(spent)}"><span class="fr-meter-funding" style="width:${Math.min(plan,funded)/scale*100}%"></span>
+    <span class="fr-meter-spent" style="width:${Math.min(plan,spent)/scale*100}%"></span></div>`;
+}
+export function categoryRows(doc,kind,chosen,query,locked='',date='',amount=0,previous=null) {
   const q=query.toLocaleLowerCase('ru').trim();
+  const month=date.slice(0,7);
+  const budget=kind==='expense'&&month?monthlyOverview(doc,month):null;
   const items=doc.categories.filter(c=>c.type===kind&&!c.archived&&!c.mergedInto);
   const hits=items.filter(c=>!c.parentId&&(!locked||c.id===locked)).flatMap(parent=>{
     const parentMatch=parent.name.toLocaleLowerCase('ru').includes(q);
     const children=items.filter(c=>c.parentId===parent.id&&(parentMatch||c.name.toLocaleLowerCase('ru').includes(q)));
     if(!parentMatch&&!children.length)return [];
     const option=c=>`<button type="button" class="fr-operation-picker-choice ${c.parentId?'fr-operation-picker-child':''}" data-category="${esc(c.id)}" aria-pressed="${chosen===c.id}"><span>${esc(c.name)}</span>${chosen===c.id?icon('check'):''}</button>`;
-    return `<section class="fr-payment-actions-group">${option(parent)}${children.map(option).join('')}</section>`;
+    const c=budget?.categories.find(row=>row.id===parent.id&&!row.savings);
+    const prior=previous?.date.startsWith(month)?previous.allocations.filter(a=>a.categoryId===parent.id||
+      items.some(item=>item.id===a.categoryId&&item.parentId===parent.id)).reduce((sum,a)=>sum+a.amount,0):0;
+    const excess=c?Math.max(0,c.spent-prior+amount-c.plan):0;
+    const budgetMarkup=c?`<div class="fr-picker-budget">${c.spent>c.plan?'Сверх плана':'Осталось по плану'} <strong>${amountText(Math.abs(c.plan-c.spent))}</strong>
+      ${budgetBar(c.plan,c.spent,c.funded)}${amount>0&&excess?'<small>После записи сверх плана на '+amountText(excess)+'</small>':''}</div>`:'';
+    return `<section class="fr-payment-actions-group ${budget?'fr-expense-picker-group':''}">${option(parent)}${budgetMarkup}${children.map(option).join('')}</section>`;
   });
   return hits.join('') || (q?`<button type="button" class="fr-operation-picker-choice" data-action="category-create-menu">${icon('plus')}<span>Создать «${esc(query.trim())}»</span></button>`:'<p class="fr-no-operations">Категорий пока нет.</p>');
 }
 
-export function categoryPicker(doc,draft,query,showCreate,locked='') {
+export function categoryPicker(doc,draft,query,showCreate,locked='',amount=0,previous=null) {
   const plus=`<button type="button" class="fr-category-new" data-action="category-create-menu" aria-label="Создать категорию или подкатегорию" aria-expanded="${showCreate}">${icon('plus')}</button>`;
-  return heading('Категория','',plus)+`<div class="fr-payment-actions-search"><input type="search" data-search-category placeholder="Поиск" aria-label="Поиск категории или подкатегории" autocomplete="off" value="${esc(query)}"></div><div class="fr-payment-actions-list" data-category-results>${categoryRows(doc,draft.kind,draft.categoryId,query,locked)}</div>`+
+  return heading('Категория','',plus)+`<div class="fr-payment-actions-search"><input type="search" data-search-category placeholder="Поиск" aria-label="Поиск категории или подкатегории" autocomplete="off" value="${esc(query)}"></div><div class="fr-payment-actions-list" data-category-results>${categoryRows(doc,draft.kind,draft.categoryId,query,locked,draft.date,amount,previous)}</div>`+
     (showCreate?`<div class="fr-operation-create-menu">${locked?'':'<button type="button" data-action="new-category">Создать категорию</button>'}<button type="button" data-action="new-subcategory">Создать подкатегорию</button></div>`:'');
 }
 
@@ -94,7 +111,7 @@ export function accountMark(account,withLabel=true){
   const type=accountType(account);
   return `<span class="fr-type-mark fr-type-${type}"><span class="fr-type-dot" aria-hidden="true"></span>${withLabel?'<span>'+accountTypes[type]+'</span>':''}</span>`;
 }
-export function accounts(doc,balances,selected,operationKind){
+export function accounts(doc,balances,selected,operationKind,{shortfall=0,transfer=false}={}){
   const rows=Object.entries(accountTypes).map(([type,title])=>{
     if(type==='credit'&&operationKind==='income')return '';
     const matches=doc.accounts.filter(a=>!a.archived&&accountType(a)===type);
@@ -103,8 +120,10 @@ export function accounts(doc,balances,selected,operationKind){
       `<button type="button" data-account="${esc(a.id)}" aria-pressed="${a.id===selected}" class="fr-typed-account"><span>${esc(a.name)}</span>
       <small>${amountText(balances[a.id])}</small>${a.id===selected?icon('check'):''}</button>`).join('')}</section>`;
   });
-  return heading('Счёт')+`<div class="fr-payment-actions-list">${rows.join('')||'<p class="fr-no-operations">Нет доступных счетов.</p>'}</div>`+
-    (rows.some(Boolean)?'':primary('Добавить счёт','first-account'));
+  const warning=shortfall?`<div class="fr-funds-warning" role="status">На этом счёте не хватает ${amountText(shortfall)}. Выберите другой счёт${transfer?' или сделайте перевод':''}.
+    ${transfer?'<button type="button" class="fr-section-secondary" data-action="fund-expense">Сделать перевод</button>':''}</div>`:'';
+  return heading('Счёт')+`<div class="fr-payment-actions-list">${warning}${rows.join('')||'<p class="fr-no-operations">Нет доступных счетов.</p>'}</div>`+
+    (rows.some(Boolean)?primary('Далее','account-next',selected&&!shortfall?'':'disabled'):primary('Добавить счёт','first-account'));
 }
 
 export function categoryLabel(doc,id) {

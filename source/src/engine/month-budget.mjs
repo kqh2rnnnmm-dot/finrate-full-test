@@ -21,7 +21,31 @@ export const monthEnd = month => {
 function ratesAt(d, month) {
   return data(d).rates.filter(v => v.month <= month).at(-1)?.shares || {};
 }
-export const rateAt = (d,id,month) => ratesAt(d,month)[id] || 0;
+export const rateAt = (d,id,month) => (data(d).monthShares?.[month] || ratesAt(d,month))[id] || 0;
+export const primaryAccount = d => d.accounts.find(a=>a.id===data(d).primaryAccountId&&!a.archived&&a.financeType!=='credit') ||
+  d.accounts.find(a=>!a.archived&&a.financeType!=='credit');
+export function expenseShortfall(account,balance,amount,previous){
+  if(!account)return 0;
+  const restored=previous?.kind==='expense'&&!previous.cancelled&&!previous.pending&&previous.accountId===account.id?previous.amount:0;
+  const limit=account.financeType==='credit'?account.credit.limit:0;
+  return Math.max(0,amount-(balance+limit+restored));
+}
+export function setPrimaryAccount(d,id){
+  if(!d.accounts.some(a=>a.id===id&&!a.archived&&a.financeType!=='credit'))fail('SELECTION');
+  write(d).primaryAccountId=id;
+}
+export function saveMonthShares(d,month,changes){
+  if(!monthPattern.test(month))fail('MONTH_SCHEMA');
+  const shares=Object.fromEntries(expenseCategories(d).map(c=>[c.id,changes[c.id]??rateAt(d,c.id,month)]));
+  const budget=write(d);
+  (budget.monthShares??={})[month]=shares;
+  validateMonthBudget(d);
+}
+export function nextBudgetMonth(month){
+  const next=new Date(month+'-01T00:00:00Z');
+  next.setUTCMonth(next.getUTCMonth()+1);
+  return next.toISOString().slice(0,7);
+}
 
 export function validateMonthBudget(d) {
   const budget = d.monthBudget;
@@ -37,6 +61,17 @@ export function validateMonthBudget(d) {
     }
     if (sum(Object.values(shares)) > 10000) fail('MONTH_PERCENT_TOTAL');
     previous = month;
+  }
+  if(budget.primaryAccountId!==undefined&&!d.accounts.some(a=>a.id===budget.primaryAccountId))fail('MONTH_SCHEMA');
+  if(budget.monthShares!==undefined){
+    if(!budget.monthShares||Array.isArray(budget.monthShares)||typeof budget.monthShares!=='object')fail('MONTH_SCHEMA');
+    for(const [month,shares] of Object.entries(budget.monthShares)){
+      if(!monthPattern.test(month)||!shares||Array.isArray(shares)||typeof shares!=='object')fail('MONTH_SCHEMA');
+      for(const [id,bps] of Object.entries(shares)){
+        if(!categories.has(id)||!Number.isInteger(bps)||bps<0||bps>10000)fail('MONTH_SCHEMA');
+      }
+      if(sum(Object.values(shares))>10000)fail('MONTH_PERCENT_TOTAL');
+    }
   }
   const goals = new Set();
   for (const g of budget.goals) {
@@ -75,8 +110,23 @@ export function setBudgetPreference(d, key, value) {
   validateMonthBudget(d);
 }
 
+function plannedReceipts(d) {
+  const posted = new Map(d.operations.filter(op=>op.kind==='income'&&!op.cancelled&&!op.pending).map(op=>[op.id,op.date]));
+  return (d.planning?.links||[]).filter(link=>posted.has(link.operationId))
+    .map(link=>({date:posted.get(link.operationId),amount:link.amount}));
+}
+
+function goalFunding(d,goal,receipts) {
+  const manual=data(d).assignments.filter(entry=>entry.categoryId===goal.categoryId);
+  const planned=receipts.filter(entry=>entry.date>=goal.start).map(({date,amount})=>({
+    date,amount:Number(BigInt(amount)*BigInt(rateAt(d,goal.categoryId,date.slice(0,7)))/10000n)
+  }));
+  return [...manual,...planned];
+}
+
 export function savings(d) {
-  const {goals,assignments} = data(d);
+  const {goals} = data(d);
+  const receipts=plannedReceipts(d);
   const spent = new Map();
   const starts = new Map(goals.filter(g=>!g.closed).map(g=>[g.categoryId,g.start]));
   for (const op of d.operations) {
@@ -91,7 +141,7 @@ export function savings(d) {
   return goals.map(g => {
     const name = d.categories.find(c=>c.id===g.categoryId)?.name;
     if (g.closed) return {...g,...g.closed};
-    const accumulated = sum(assignments.filter(a=>a.categoryId===g.categoryId).map(a=>a.amount));
+    const accumulated = sum(goalFunding(d,g,receipts).map(a=>a.amount));
     const used = Math.max(0,spent.get(g.categoryId)||0);
     return {...g,name,accumulated,spent:used,remaining:Math.max(0,accumulated-used)};
   });
@@ -164,6 +214,10 @@ export function monthlyOverview(d,month) {
   const from = month+'-01', to = monthEnd(month);
   const fact = totals(d,{from,to});
   const expected = sum(incomeOccurrences(d,from,to).map(r=>r.amount));
+  const receipts=plannedReceipts(d).filter(receipt=>receipt.date>=from&&receipt.date<=to);
+  const planned=sum(receipts.map(receipt=>receipt.amount));
+  const goalInfo=savings(d).filter(g=>!g.closed);
+  const savingsIds=new Set(data(d).goals.map(g=>g.categoryId));
   const spent = new Map();
   for (const [id,n] of Object.entries(fact.byCategory)) {
     const root = categoryRoot(d,id);
@@ -171,7 +225,15 @@ export function monthlyOverview(d,month) {
   }
   const categories = expenseCategories(d).map(c=>{
     const bps = rateAt(d,c.id,month);
-    return {...c,bps,plan:Number(BigInt(expected)*BigInt(bps)/10000n),spent:Math.max(0,spent.get(c.id)||0)};
+    const plan=Number(BigInt(expected)*BigInt(bps)/10000n);
+    const funded=expected?Number(BigInt(plan)*BigInt(Math.min(planned,expected))/BigInt(expected)):0;
+    return {...c,bps,plan,funded,spent:Math.max(0,spent.get(c.id)||0),savings:savingsIds.has(c.id)};
   }).sort((a,b)=>Number(b.bps>0)-Number(a.bps>0)||a.name.localeCompare(b.name,'ru'));
-  return {...fact,...availableMoney(d),month,expected,categories};
+  const reservedForMonth=sum(goalInfo.map(goal=>{
+    const assigned=sum(goalFunding(d,goal,receipts).filter(a=>a.date>=from&&a.date<=to).map(a=>a.amount));
+    return Math.min(goal.remaining,Math.max(0,assigned-(spent.get(goal.categoryId)||0)));
+  }));
+  const excludeSavings=data(d).excludeSavings;
+  return {...fact,...availableMoney(d),month,expected,planned,additional:Math.max(0,fact.income-planned),
+    result:addSafe(fact.result,excludeSavings?-reservedForMonth:0),excludeSavings,categories};
 }
