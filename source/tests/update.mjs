@@ -69,6 +69,7 @@ async function record(page,n,category,account){
   await button(page,category).click();
   await button(page,'Сегодня').click();
   await page.locator('[data-account]').filter({hasText:account}).click();
+  await page.locator('[data-action=account-next]').click();
   await button(page,'Сохранить').click();
 }
 try{
@@ -96,6 +97,7 @@ try{
   await button(page,'Категории').click();
   await button(page,'Доходы').click();
   await button(page,'Создать категорию').click();
+  await button(page,'Доходная').click();
   await page.getByRole('textbox',{name:'Название'}).fill('Первый доход');
   await button(page,'Сохранить').click();
   await page.getByText('Первый доход',{exact:true}).waitFor();
@@ -107,6 +109,7 @@ try{
   await button(page,'Добавить счёт').click();
   await page.getByRole('textbox',{name:'Название'}).fill('Первый счёт');
   await button(page,'Сохранить').click();
+  await page.locator('[data-action=account-next]').click();
   await page.getByRole('button',{name:'Выбрать счёт операции'}).waitFor();
   await button(page,'Сохранить').click();
   await button(page,'Сводка').waitFor();

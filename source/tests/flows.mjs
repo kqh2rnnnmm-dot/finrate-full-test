@@ -3,6 +3,7 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import binary from '@sparticuz/chromium';
+import {budgetBar} from '../src/screens.mjs';
 import {scope,serveFixture,fixture} from './fixture-server.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.webmanifest':'application/manifest+json','.png':'image/png'};
@@ -66,6 +67,7 @@ try{
     await button('Сегодня').click();
     await title('Счёт');
     await page.locator('[data-account=card]').click();
+    await page.locator('[data-action=account-next]').click();
     await title('Расход');
     await geometry();
     await page.screenshot({path:'/tmp/finrate-restart-review-'+width+'.png'});
@@ -86,6 +88,7 @@ try{
     await button('Аванс').click();
     await button('Сегодня').click();
     await page.locator('[data-account=cash]').click();
+    await page.locator('[data-action=account-next]').click();
     await button('Изменить сумму').click();
     await button('Удалить цифру').click();
     await button('Далее').click();
@@ -93,7 +96,7 @@ try{
     await button('Сводка').waitFor();
 
     await button('Сводка').click();
-    assert.match(await page.locator('.fr-amount-overview').innerText(),/37,5/);
+    assert.match(await page.locator('.fr-month-result').innerText(),/37,5/);
     await page.locator('[data-section-action=received]').click();
     assert.equal(await page.locator('[data-operation]').count(),1);
     assert.match(await page.locator('[data-operation]').innerText(),/Аванс/);
@@ -121,7 +124,7 @@ try{
     await back();
     await button('Закрыть меню').click();
     await button('Сводка').click();
-    assert.match(await page.locator('.fr-amount-overview').innerText(),/50/);
+    assert.match(await page.locator('.fr-month-result').innerText(),/50/);
 
     const existing=await page.evaluate(async()=> (await indexedDB.databases()).map(db=>db.name).sort());
     assert.deepEqual(existing,['finrate-full-test-restart-v1']);
@@ -131,6 +134,60 @@ try{
     await button('Сводка').click();
     await page.locator('[data-section-action=received]').click();
     assert.equal(await page.locator('[data-operation]').count(),1);
+    assert.deepEqual(errors,[]);
+    await back();
+    const resultFont=await page.locator('.fr-month-result strong').evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
+    assert.ok(resultFont>=28,'Monthly result is the largest amount');
+    const meter=page.locator('[data-test-meter] .fr-category-meter');
+    await page.locator('[data-section-scroll]').evaluate((el,markup)=>{
+      el.insertAdjacentHTML('afterbegin', '<div data-test-meter>'+markup+'</div>');
+    },budgetBar(10000,20000,10000));
+    const marker=await meter.evaluate(el=>{
+      const bar=el.getBoundingClientRect();
+      const spent=el.lastElementChild.getBoundingClientRect();
+      return {width:bar.width,height:bar.height,spentWidth:spent.width,
+        left:spent.left-bar.left,color:getComputedStyle(el).backgroundColor};
+    });
+    assert.equal(marker.left,0);
+    assert.equal(marker.height,20);
+    assert.ok(Math.abs(marker.spentWidth-marker.width/2)<1);
+    assert.equal(marker.color,mode==='dark'?'rgb(243, 116, 124)':'rgb(191, 66, 76)');
+    await page.locator('[data-test-meter]').evaluate(el=>el.remove());
+    const monthBefore=await page.locator('.fr-month-title').innerText();
+    const nextMonth=button('Следующий месяц');
+    const nextMonthBox=await nextMonth.boundingBox();
+    await button('Как считается результат месяца').click();
+    await page.getByRole('dialog').waitFor();
+    await page.touchscreen.tap(nextMonthBox.x+nextMonthBox.width/2,nextMonthBox.y+nextMonthBox.height/2);
+    await page.getByRole('dialog').waitFor({state:'hidden'});
+    assert.equal(await page.locator('.fr-month-title').innerText(),monthBefore);
+    await nextMonth.click();
+    assert.notEqual(await page.locator('.fr-month-title').innerText(),monthBefore);
+    await back();
+    await page.locator('[data-entry=expense]').tap();
+    for(const key of ['1','0','0'])await button(key).tap();
+    await button('Далее').click();
+    await page.getByRole('searchbox').fill('супермаркет');
+    await button('Супермаркеты').click();
+    await button('Сегодня').click();
+    const accountNext=page.locator('[data-action=account-next]');
+    assert.equal(await accountNext.isEnabled(),true);
+    await page.locator('[data-account=spare]').tap();
+    assert.equal(await accountNext.isDisabled(),true);
+    await button('Сделать перевод').click();
+    await title('Откуда');
+    await page.locator('[data-section-action=transfer-pick][data-id=card]').click();
+    const destination=page.locator('[data-section-action=transfer-target]');
+    assert.equal(await destination.isDisabled(),true);
+    assert.match(await destination.innerText(),/Запасная карта/);
+    await page.locator('[data-section-action=transfer-next]').click();
+    await page.locator('[data-action=transfer-accept]').click();
+    await button('Перевести').click();
+    await title('Счёт');
+    assert.equal(await page.locator('[data-account=spare]').getAttribute('aria-pressed'),'true');
+    await accountNext.click();
+    await button('Сохранить').click();
+    await button('Сводка').waitFor();
     assert.deepEqual(errors,[]);
     await context.close();
     console.log('PASS',width,height,mode,'оба ввода, редактирование, отмена, сводка, сохранение без сети');
