@@ -228,7 +228,7 @@ try{
   await coherent(goalsPage,A);
   await goalButton('Сводка').click();
   await goalButton('Ещё').click();
-  await goalButton('Накопления').click();
+  await goalsPage.locator('.fr-summary-dialog [data-section-action=savings]').click();
   await goalButton('История накоплений').click();
   for(const [id,status,amount] of [['holiday','Накоплено и потрачено','50 000'],['notebook','Накоплено','10 000']]){
     await goalsPage.locator(`[data-section-action=closed-goal][data-id=${id}]`).click();

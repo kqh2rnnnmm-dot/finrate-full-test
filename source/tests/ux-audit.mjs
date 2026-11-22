@@ -177,7 +177,7 @@ async function audit(browser,view,theme,version){
     await rows.evaluate(el=>el.scrollTop=el.scrollHeight);
     const last=section('category','zz-long-expense');
     const visible=await last.evaluate(el=>({
-      item:el.getBoundingClientRect().bottom,tab:document.querySelector('.fr-category-tab-island').getBoundingClientRect().top
+      item:el.getBoundingClientRect().bottom,tab:document.querySelector('.fr-category-carousel, .fr-category-tab-island').getBoundingClientRect().top
     }));
     if(!before)assert.ok(visible.item<=visible.tab,JSON.stringify(visible));
     await shot('categories-last');
