@@ -71,11 +71,38 @@ try{
     const monthName=await page.locator('.fr-month-title').innerText();
     await button('Предыдущий месяц').click();
     assert.notEqual(await page.locator('.fr-month-title').innerText(),monthName);
+    const more=page.locator('.fr-summary-dialog');
+    await button('Ещё').click();
+    assert.equal(await more.locator('h2').evaluate(el=>el===document.activeElement),true);
     await section('received').click();
     await title('Получено');
     await back();
+    await more.waitFor({state:'visible'});
+    await section('summary-expenses').click();
+    await title('Расходы');
+    await back();
+    await more.waitFor({state:'visible'});
+    await page.mouse.click(2,2);
+    await more.waitFor({state:'hidden'});
     await button('Следующий месяц').click();
     assert.equal(await page.locator('.fr-month-title').innerText(),monthName);
+    const card=await page.locator('.fr-summary-card').evaluate(el=>{
+      const rect=selector=>el.querySelector(selector).getBoundingClientRect();
+      const center=box=>box.top+box.height/2;
+      const amount=rect('.np-money'),more=rect('.fr-summary-more'),result=rect('.fr-month-result'),info=rect('[data-action=month-result-info]');
+      return {alignment:Math.abs(center(amount)-center(more)),top:info.top-result.top,right:result.right-info.right};
+    });
+    assert.ok(card.alignment<1&&card.top<1&&card.right<1);
+    await button('Ещё').click();
+    await section('summary-accounts').click();
+    await title('Счета и кошельки');
+    await back();
+    await more.waitFor({state:'visible'});
+    await section('summary-payments').click();
+    await title('Платежи');
+    await back();
+    await more.waitFor({state:'visible'});
+    await button('Закрыть').click();
     await section('budget-settings').click();
     const savingsSwitch=page.getByRole('switch',{name:'Показывать накопления в результате месяца'});
     const toggleBefore=await savingsSwitch.getAttribute('aria-checked');
@@ -110,9 +137,12 @@ try{
     await section('share','food').click();
     assert.equal(await page.getByRole('textbox',{name:'Процент Продукты'}).inputValue(),'25');
     await back();
+    await button('Ещё').click();
     await section('received').click();
     await title('Получено');
     await back();
+    await more.waitFor({state:'visible'});
+    await button('Закрыть').click();
     await back();
 
     await menu('Учёт','Категории');
@@ -504,7 +534,9 @@ try{
     assert.match(await page.locator('.fr-section-panel').innerText(),/880/);
     await button('Весь месяц').click();
     await title('Сводка');
-    assert.match(await page.locator('.fr-summary-links').innerText(),/880/);
+    await button('Ещё').click();
+    assert.match(await more.locator('[data-section-action=received]').innerText(),/880/);
+    await button('Закрыть').click();
     await back();
 
     const password='FinRate-test-backup-2026';

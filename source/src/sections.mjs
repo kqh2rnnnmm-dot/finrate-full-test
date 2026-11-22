@@ -45,13 +45,27 @@ export function amountOverview(value,{label='',caption=''}={}) {
   return `<div class="fr-amount-overview">${label?small(label):''}${moneyLabel(value)}${caption?small(caption):''}</div>`;
 }
 
-export function summary(month, budget) {
+export function summary(month, budget, period) {
+  const result = amountText(budget.result);
   return heading('Сводка','',`<button type="button" class="fr-category-new" data-section-action="budget-settings" aria-label="Настройки сводки">${icon('settings')}</button>`)+monthControl(month)+body(
-    `<div class="fr-month-result"><div>Результат месяца <button type="button" data-action="month-result-info" aria-label="Как считается результат месяца" aria-haspopup="dialog">${icon('info')}</button></div>${moneyLabel(budget.result)}</div>
-      <dialog class="fr-info-dialog" aria-label="Результат месяца"><div class="fr-info-panel" tabindex="-1" autofocus><strong>Результат месяца</strong>
-      <p>Доходы минус расходы.${budget.excludeSavings?' Деньги, оставшиеся в накоплениях за месяц, вычитаются.':' Накопления входят в результат.'}</p></div></dialog>`+
-    `<div class="fr-summary-links">${link('Получено','received','',moneyLabel(budget.income))+
-      pair('Ожидалось по плану',budget.expected)+pair('Получено по плану',budget.planned)+pair('Дополнительный доход',budget.additional)+link('Накопления','savings')}</div>`+
+    `<div class="fr-summary-card">
+      <div class="fr-month-result"><strong class="np-money ${result.length>11?'fr-result-long':''}" aria-label="Результат месяца ${esc(result)}">${result}</strong>
+        <button type="button" data-action="month-result-info" aria-label="Как считается результат месяца" aria-haspopup="dialog">${icon('info')}</button>
+      </div>
+      <button type="button" class="fr-summary-more" data-section-action="summary-more" aria-haspopup="dialog">Ещё</button>
+    </div>
+    <dialog class="fr-info-dialog" aria-label="Результат месяца"><div class="fr-info-panel" tabindex="-1" autofocus><strong>Результат месяца</strong>
+      <p>Все доходы за месяц минус все расходы за месяц. ${budget.excludeSavings?'Из результата также вычтены накопления за этот месяц.':'Накопления включены в результат.'}</p></div></dialog>
+    <dialog class="fr-summary-dialog" aria-labelledby="fr-summary-period"><div class="fr-summary-menu">
+      <h2 id="fr-summary-period" tabindex="-1" autofocus>${esc(period)}</h2>
+      ${link('Получено','received','',moneyLabel(budget.income))}
+      <div class="fr-summary-breakdown">${pair('Ожидалось по плану',budget.expected)}${pair('Получено по плану',budget.planned)}${pair('Дополнительный доход',budget.additional)}</div>
+      ${link('Расходы','summary-expenses','',moneyLabel(budget.expense))}
+      ${link('Накопления','savings','',moneyLabel(budget.reservedForMonth))}
+      ${link('Планы доходов','summary-plans')}${link('Платежи','summary-payments')}
+      <div class="fr-summary-available">${link('Доступно к тратам','summary-accounts','',moneyLabel(budget.available))}${small('Счета и кошельки · сейчас')}</div>
+      ${actionButton('Закрыть','summary-more-close')}
+    </div></dialog>`+
     budget.categories.filter(c=>!c.savings).map(c=>`<div class="fr-summary-category">${link(c.name,'share',c.id,moneyLabel(c.spent))}
       ${budgetBar(c.plan,c.spent,c.funded)+small('План '+amountText(c.plan))}</div>`).join('')
   );

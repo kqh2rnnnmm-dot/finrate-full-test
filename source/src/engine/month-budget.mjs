@@ -235,5 +235,5 @@ export function monthlyOverview(d,month) {
   }));
   const excludeSavings=data(d).excludeSavings;
   return {...fact,...availableMoney(d),month,expected,planned,additional:Math.max(0,fact.income-planned),
-    result:addSafe(fact.result,excludeSavings?-reservedForMonth:0),excludeSavings,categories};
+    result:addSafe(fact.result,excludeSavings?-reservedForMonth:0),excludeSavings,reservedForMonth,categories};
 }

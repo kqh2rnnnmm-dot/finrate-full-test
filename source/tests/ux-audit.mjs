@@ -73,25 +73,28 @@ async function audit(browser,view,theme,version){
     await button('Сводка').click();
     await shot('summary');
     if(!before){
-      const contrastColors=await page.locator('.fr-amount-overview small').evaluate(label=>[
+      const contrastColors=await page.locator('.fr-summary-category .fr-muted').first().evaluate(label=>[
         getComputedStyle(label).color,getComputedStyle(label.closest('.fr-app')).backgroundColor
       ]);
       assert.ok(contrast(...contrastColors)>=4.5);
-      assert.ok(await page.locator('.fr-amount-overview .np-money').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))>
+      assert.ok(await page.locator('.fr-month-result .np-money').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))>
         await section('received').locator('.np-money').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)));
     }
     await section('month','-1').click();
     if(!before){
-      assert.equal(await page.locator('.fr-summary-category .fr-budget-bar').count(),0);
-      assert.ok(await page.getByText('Без плана и расходов',{exact:true}).count());
+      const fills=await page.locator('.fr-summary-category .fr-category-meter span').evaluateAll(items=>items.map(item=>item.style.width));
+      assert.ok(fills.length>0&&fills.every(width=>width==='0%'));
     }
     await shot('summary-zero');
+    if(!before)await button('Ещё').click();
     await section('received').click();await heading('Получено');
     if(!before)assert.equal(await page.getByText('Получено',{exact:true}).count(),1);
-    await back();await section('month','1').click();
+    await back();if(!before)await button('Закрыть').click();await section('month','1').click();
+    if(!before)await button('Ещё').click();
     await section('received').click();await heading('Получено');
     await shot('received');
     await back();
+    if(!before)await button('Закрыть').click();
     await section('share','home').click();
     await shot('category-share');
     if(!before){
@@ -103,9 +106,12 @@ async function audit(browser,view,theme,version){
       await section('budget-settings').click();
       for(const action of ['distribution','income-plans','slider-step'])assert.equal(await section(action).count(),0);
       await back();
-    }else await section('budget-settings').click();
-    await section('money').locator('svg').click();await heading('Можно тратить');
-    if(!before)assert.equal(await page.getByText('Можно тратить',{exact:true}).count(),1);
+      await button('Ещё').click();
+      assert.ok(await section('summary-accounts').isVisible());
+    }else{
+      await section('budget-settings').click();
+      await section('money').locator('svg').click();await heading('Можно тратить');
+    }
     await shot('available');
     await section('savings').click();
     await shot('savings');
@@ -115,8 +121,10 @@ async function audit(browser,view,theme,version){
       await page.getByText('Доступно потратить',{exact:true}).waitFor();
       await page.getByText('До цели',{exact:true}).waitFor();
     }
-    await back();await back();await back();
-    if(before)await back();
+    await back();await back();
+    if(before){
+      await back();await back();
+    }else await button('Закрыть').click();
     await back();
 
     await menu('Планы и отчёты');
@@ -169,7 +177,7 @@ async function audit(browser,view,theme,version){
     await rows.evaluate(el=>el.scrollTop=el.scrollHeight);
     const last=section('category','zz-long-expense');
     const visible=await last.evaluate(el=>({
-      item:el.getBoundingClientRect().bottom,tab:document.querySelector('.fr-category-tab-island').getBoundingClientRect().top
+      item:el.getBoundingClientRect().bottom,tab:document.querySelector('.fr-category-carousel, .fr-category-tab-island').getBoundingClientRect().top
     }));
     if(!before)assert.ok(visible.item<=visible.tab,JSON.stringify(visible));
     await shot('categories-last');
@@ -238,11 +246,18 @@ async function audit(browser,view,theme,version){
 
     await page.goto(url);
     await page.locator('[data-entry=income]').click();
-    await heading('Ожидаемые доходы');
-    assert.ok(await section('income-occurrence','salary-plan:2026-11').count());
-    await section('income-occurrence','salary-plan:2026-11').click();
-    await heading('Зарплата');
-    await back();await heading('Ожидаемые доходы');
+    if(before){
+      await heading('Ожидаемые доходы');
+      await section('income-occurrence','salary-plan:2026-11').click();
+      await heading('Зарплата');
+      await back();await heading('Ожидаемые доходы');
+    }else{
+      await button('Записать запланированный доход').click();
+      await heading('Запланированные доходы');
+      await section('income-due-pick','salary-plan:2026-11').click();
+      await heading('Записать поступление');
+      await back();await heading('Запланированные доходы');
+    }
     assert.deepEqual(errors,[]);
     console.log('PASS UX',version,view.width,theme,shots,'captures, navigation, focus and console');
   }finally{

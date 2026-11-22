@@ -454,6 +454,10 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-goal-preview progress::-moz-progress-bar{background:var(--palette-20);border-radius:6px}
 #finrate .fr-floating-history .fr-section-secondary{min-height:54px;box-shadow:0 3px 16px var(--palette-41);padding-inline:22px}
 
+#finrate button.fr-typed-account[data-account]{display:grid;grid-template-columns:minmax(0,1fr) auto 20px;align-items:center;gap:10px;min-height:55px;padding:10px 0;border-radius:13px;font-size:18px;font-weight:600}
+#finrate button.fr-typed-account[data-account]>span{min-width:0;overflow-wrap:anywhere}
+#finrate button.fr-typed-account[data-account]>small{font-size:16px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#finrate button.fr-typed-account[data-account]>svg{width:20px;height:20px}
 #finrate .fr-typed-account-name{display:flex;align-items:baseline;gap:12px;font-size:18px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
 #finrate .fr-account-list-item .fr-type-dot{margin:0}
 #finrate [data-section-page] .fr-account-list-item .np-money{display:block;font-size:24px;letter-spacing:-.5px;margin-top:8px}
@@ -612,11 +616,23 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-picker-budget strong{float:inline-end}
 #finrate .fr-picker-budget .fr-budget-bar{clear:both;margin:8px 0}
 #finrate .fr-picker-budget small{color:var(--red)}
-#finrate .fr-month-result{text-align:center;padding:12px 0 20px;color:var(--ink)}
-#finrate .fr-month-result>div{display:flex;justify-content:center;align-items:center;gap:4px;color:var(--dim)}
-#finrate .fr-month-result button{width:44px;height:44px;display:grid;place-items:center;border:0;background:transparent;color:inherit}
-#finrate .fr-month-result button svg{width:18px;height:18px}
-#finrate [data-section-page] .fr-month-result>.np-money{display:block;font-size:clamp(28px,8vw,40px);line-height:1.15;white-space:normal;overflow-wrap:anywhere}
+#finrate .fr-summary-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;width:min(100%,360px);margin:8px auto 14px;padding:6px;background:var(--panel);border-radius:21px}
+#finrate .fr-month-result{position:relative;display:grid;align-items:center;min-height:62px;padding:10px 42px 10px 12px;border-radius:15px;background:var(--line);color:var(--ink)}
+#finrate .fr-month-result button{position:absolute;top:0;right:0;width:44px;height:44px;display:grid;place-items:start end;padding:8px;border:0;border-radius:13px;background:transparent;color:var(--dim)}
+#finrate .fr-month-result button svg{width:17px;height:17px}
+#finrate [data-section-page] .fr-month-result>.np-money{font-size:clamp(28px,7.6vw,34px);line-height:1.12;white-space:normal;overflow-wrap:anywhere}
+#finrate [data-section-page] .fr-month-result>.fr-result-long{font-size:clamp(17px,5.4vw,24px)}
+#finrate .fr-summary-more{min-width:48px;min-height:44px;padding:0 9px;border:0;border-radius:13px;background:transparent;color:var(--ink);font:inherit;font-weight:600}
+#finrate .fr-summary-dialog{width:min(360px,calc(100% - 32px));max-height:calc(100% - 48px);padding:0;border:0;border-radius:23px;background:var(--panel);color:var(--ink);overscroll-behavior:contain}
+#finrate .fr-summary-dialog::backdrop{background:#0007;touch-action:none}
+#finrate .fr-summary-menu{padding:16px}
+#finrate .fr-summary-menu h2{margin:0 0 8px;outline:none}
+#finrate .fr-summary-menu .np-link{padding:8px 4px;min-height:44px;border-radius:12px}
+#finrate .fr-summary-menu .fr-section-name{white-space:normal;overflow-wrap:anywhere}
+#finrate .fr-summary-breakdown .np-row{color:var(--dim);gap:8px;margin:0;padding:5px 4px;font-size:14px}
+#finrate .fr-summary-available{margin-top:8px;border-top:1px solid var(--line)}
+#finrate .fr-summary-available .fr-muted{margin:0 4px 10px}
+#finrate .fr-summary-menu .fr-section-secondary{border-radius:14px}
 #finrate .fr-info-dialog{width:min(320px,calc(100% - 40px));padding:0;border:0;border-radius:20px;background:var(--panel);color:var(--ink)}
 #finrate .fr-info-dialog::backdrop{background:#0004;touch-action:none}
 #finrate .fr-info-panel{padding:20px;outline:none}
