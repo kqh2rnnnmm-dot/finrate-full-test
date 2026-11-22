@@ -63,7 +63,7 @@ async function coherent(page,info){
   assert.equal(await page.locator('link[rel=stylesheet]').getAttribute('href'),'./styles-'+info.id+'.css');
 }
 async function record(page,n,category,account){
-  await page.locator('[data-entry=income]').click();
+  await page.locator('[data-entry=income]').click();await button(page,'Другой доход').click();
   for(const digit of String(n))await button(page,digit).click();
   await button(page,'Далее').click();
   await button(page,category).click();
@@ -95,7 +95,6 @@ try{
   await shot(page,'V12-clean-accounts');
   await button(page,'Назад').click();
   await button(page,'Категории').click();
-  await button(page,'Доходы').click();
   await button(page,'Создать категорию').click();
   await button(page,'Доходная').click();
   await page.getByRole('textbox',{name:'Название'}).fill('Первый доход');
@@ -103,7 +102,7 @@ try{
   await page.getByText('Первый доход',{exact:true}).waitFor();
   await button(page,'Назад').click();
   await button(page,'Закрыть меню').click();
-  await page.locator('[data-entry=income]').click();
+  await page.locator('[data-entry=income]').click();await button(page,'Другой доход').click();
   await button(page,'3').click();await button(page,'2').click();
   await button(page,'Далее').click();await button(page,'Первый доход').click();await button(page,'Сегодня').click();
   await button(page,'Добавить счёт').click();
@@ -123,8 +122,8 @@ try{
 
   const other=await context.newPage();
   await other.goto(url);await coherent(other,A);
-  await page.locator('[data-entry=income]').click();await button(page,'7').click();
-  await other.locator('[data-entry=income]').click();await button(other,'8').click();
+  await page.locator('[data-entry=income]').click();await button(page,'Другой доход').click();await button(page,'7').click();
+  await other.locator('[data-entry=income]').click();await button(other,'Другой доход').click();await button(other,'8').click();
 
   served='B';incomplete=true;
   await update(page);

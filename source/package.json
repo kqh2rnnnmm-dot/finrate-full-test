@@ -1,6 +1,6 @@
 {
   "name": "finrate-full",
-  "version": "0.2.0-test.5",
+  "version": "0.2.0-test.6",
   "private": true,
   "type": "module",
   "scripts": {

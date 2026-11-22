@@ -14,6 +14,7 @@ import {RECURRENCES} from './engine/recurring-income.mjs';
 const doc = ledger.document;
 const date = localDate;
 const todayMonth = () => date().slice(0,7);
+const categoryTypes=[['expense','Расходы'],['savings','Накопления'],['income','Доходы']];
 const blank = ['', 'Выбрать'];
 const number = (key,label,required=true) => ({key,label,type:'money',required,placeholder:'0'});
 const text = (key,label) => ({key,label});
@@ -282,16 +283,19 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       number('amount','Сумма'),choices('categoryId','Категория / подкатегория',categoryOptions('income')),
       choices('repeat','Повторение',Object.entries(RECURRENCES)),
       choices('day','Число месяца',numbers(31,1)),choices('weekday','День недели',weekdays.map((v,i)=>[i,v])),
-      choices('month','Месяц',numbers(12,1)),choices('accountId','Счёт',accountOptions(a=>!isCredit(a)))
+      choices('month','Месяц',numbers(12,1)),choices('accountId','Счёт',accountOptions(a=>!isCredit(a))),
+      ...(source?[]:[day('start','План действует с')])
     ],{amount:numeric(last?.amount),categoryId:last?.categoryId,repeat:last?.repeat||'monthly',
       day:String(last?.day||now.getUTCDate()),weekday:String(last?.weekday??now.getUTCDay()),
-      month:String(last?.month||now.getUTCMonth()+1),accountId:last?.accountId},
-    v=>commit('income.plan',d=>income.saveRecurringIncome(d,{...v,id,name:categoryName(v.categoryId),amount:asAmount(v.amount)},date())),
+      month:String(last?.month||now.getUTCMonth()+1),accountId:last?.accountId,start:date()},
+    v=>commit('income.plan',d=>income.saveRecurringIncome(d,{...v,id,name:categoryName(v.categoryId),amount:asAmount(v.amount)},source?date():v.start)),
     {dynamic:'income'});
   }
   function incomeRow(id) {
     const old = doc().planning?.occurrences.find(o=>o.id===id);
-    const from = old?.date || id.slice(id.lastIndexOf(':')+1);
+    const from = old?.date || id.match(/:\d{4}-\d{2}-\d{2}$/)?.[0].slice(1) ||
+      id.match(/:\d{4}-\d{2}(?=:|$)/)?.[0].slice(1).concat('-01') ||
+      doc().planning?.incomes.find(plan=>id===plan.id+':once')?.start;
     const start = /^\d{4}-\d{2}-\d{2}$/.test(from)?from:state().month+'-01';
     return income.incomeOccurrences(doc(),start,budget.monthEnd(start.slice(0,7))).find(o=>o.id===id);
   }
@@ -299,11 +303,17 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const account=currentAccount(preferred);
     return account&&!account.archived&&!isCredit(account)?preferred:budget.primaryAccount(doc())?.id;
   }
-  function receipt(row) {
+  function receipt(row, review=false) {
     const id = uid();
-    const save = (v,final,nested=false) => commit('income.receipt',d=>income.confirmPlannedIncome(d,row.id,{
+    const receiptEntry=(d,v,final)=>income.confirmPlannedIncome(d,row.id,{
       ...amountEntry(id,'income',v,row.categoryId),today:date()
-    },{final}),nested?()=>{stack.pop();pop();}:pop);
+    },{final});
+    const save = (v,final,nested=false) => {
+      if(!review)return commit('income.receipt',d=>receiptEntry(d,v,final),nested?()=>{stack.pop();pop();}:pop);
+      return enter('income-review',{row,values:v,final,save:()=>commit('income.receipt',d=>receiptEntry(d,v,final),()=>{
+        stack=[];exit();
+      })});
+    };
     form('Записать поступление',[number('amount','Получено'),day('date','Дата'),receiptAccounts()],
       {amount:numeric(row.remaining),date:date(),accountId:draftReceiptAccount(row.accountId)},
       v=>{
@@ -366,9 +376,22 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   }
 
   const operationList = rows => operationRows(doc(),rows);
-  const pendingIncome = () => income.dueIncomeOccurrences(doc(),date());
+  const pendingIncome = month => {
+    const d=doc();
+    const first=month+'-01';
+    const from=month===todayMonth()?(d.planning?.incomes||[]).reduce((earliest,plan)=>plan.start<earliest?plan.start:earliest,first):first;
+    return income.incomeOccurrences(d,from,budget.monthEnd(month)).filter(row=>row.remaining>0);
+  };
   const freeIncome = op => op.amount-(doc().planning?.links||[])
     .filter(l=>l.operationId===op.id).reduce((sum,l)=>sum+l.amount,0);
+  const linkableIncome = () => doc().operations.filter(o=>o.kind==='income'&&!o.cancelled&&!o.pending&&o.date<=date()&&freeIncome(o)>0);
+  function linkIncome(row,operationId){
+    const operation=linkableIncome().find(o=>o.id===operationId);
+    if(!row?.remaining||!operation)return;
+    const amount=Math.min(freeIncome(operation),row.remaining);
+    return confirm('Связать с планом?',amountText(amount)+' будет учтено по плану «'+row.name+'». Остаток на счёте не изменится.',
+      'Связать доход','income.link',d=>income.linkIncome(d,row.id,operationId),()=>{stack.pop();pop();});
+  }
   function paymentDetail(s) {
     const row = payments.paymentOccurrence(doc(),s.id);
     const facts = payments.paymentHistory(doc()).filter(x=>x.occurrence.id===s.id);
@@ -433,7 +456,12 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           ui.body(
             `<div class="fr-payment-actions-search"><input type="search" data-section-search placeholder="Поиск" aria-label="Поиск категорий" value="${esc(s.query)}"></div>`+
             `<div data-section-results>${categoryResults(s)}</div>`)+
-          `<div class="fr-category-tab-island">${ui.tabs([['expense','Расходы'],['income','Доходы'],['savings','Накопления']],s.tab)}</div>`;
+          `<div class="fr-category-carousel" role="slider" tabindex="0" aria-label="Тип категорий"
+            aria-valuemin="1" aria-valuemax="3" aria-valuenow="${categoryTypes.findIndex(([id])=>id===s.tab)+1}"
+            aria-valuetext="${categoryTypes.find(([id])=>id===s.tab)[1]}">
+            <div class="fr-category-carousel-highlight" aria-hidden="true"></div>
+            <div class="fr-category-carousel-rail" aria-hidden="true">${categoryTypes.map(([id,label])=>
+              `<span data-category-slide="${id}" ${id===s.tab?'data-current':''}>${label}</span>`).join('')}</div></div>`;
       }
       case 'category-type-picker': return list('Тип категории',
         ui.link('Расходная','category-type-create','expense')+ui.link('Доходная','category-type-create','income')+ui.link('Накопительная','category-type-create','savings'));
@@ -553,9 +581,28 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         const o=d.operations.find(o=>o.id===s.id);
         return list('Корректировка',ui.panel(ui.pair('Сумма',o.amount)+ui.small(accountName(o.accountId))+ui.small(dateText(o.date))));
       }
+      case 'income-choice':
+        return list('Записать доход','<div class="fr-income-choice">'+
+          '<button class="fr-primary" type="button" data-section-action="planned-income">Записать запланированный доход</button>'+
+          ui.actionButton('Другой доход','normal-income')+'</div>');
       case 'income-due':
-        return list('Ожидаемые доходы',pendingIncome().map(expectedIncomeRow).join('')+
-          ui.actionButton('Записать доход','normal-income'));
+      case 'income-link-target': {
+        const linking=s.page==='income-link-target';
+        return list('Запланированные доходы',ui.monthControl(s.month)+
+          (pendingIncome(s.month).map(row=>expectedIncomeRow(row,linking?'income-link-target-pick':'income-due-pick')).join('')||
+          ui.empty('На этот месяц нет открытых ожиданий. Можно выбрать другой месяц.'))+
+          (linking?'':ui.actionButton('Планы доходов','income-plans-manage')));
+      }
+      case 'income-review': {
+        const v=s.values;
+        return list('Доход',ui.panel(ui.pair('Получено',asAmount(v.amount))+ui.small(s.row.name)+
+          ui.small(dateText(v.date))+ui.small(accountName(v.accountId)))+
+          (s.error?ui.empty(s.error):'')+ui.actionButton('Сохранить','income-review-save'));
+      }
+      case 'income-link-source':
+        return list('Связать записанный доход',linkableIncome().map(o=>ui.link(categoryName(o.allocations[0]?.categoryId),
+          'income-link-source-pick',o.id,ui.small(amountText(freeIncome(o))+' · '+dateText(o.date)))).join('')||
+          ui.empty('Нет записанных доходов, которые можно связать.'));
       case 'income-completion':
         return list('Доход получен полностью?',ui.panel(ui.pair('Получено',s.received)+ui.pair('Осталось',s.row.remaining-s.received))+
           ui.actionButton('Получен частично','income-receipt-part')+ui.actionButton('Получен полностью','income-receipt-full')+
@@ -566,16 +613,17 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'income-plans': {
         const archived=s.tab==='archive';
         const plans=(d.planning?.incomes||[]).filter(p=>p.archived===archived&&!p.deletedAt);
-        const rows=archived?[]:income.incomeOccurrences(d,s.month+'-01',budget.monthEnd(s.month)).filter(o=>o.date<=date());
+        const rows=archived?[]:income.incomeOccurrences(d,s.month+'-01',budget.monthEnd(s.month));
         const entries=plans.map(p=>`<button type="button" class="fr-income-plan-row" data-section-action="income-source" data-id="${esc(p.id)}">
           <span><strong>${esc(p.name)}</strong>${ui.small(incomeSchedule(p))}</span>
           <span>${ui.small('По плану')}${ui.moneyLabel(p.amount)}</span></button>`).join('');
         const expected=!archived&&(rows.length||d.planning?.incomes.length)?`<section class="fr-income-occurrences"><h2>Ожидаемые поступления</h2>
-          ${ui.monthControl(s.month)}${rows.map(expectedIncomeRow).join('')||
+          ${ui.monthControl(s.month)}${rows.map(row=>expectedIncomeRow(row)).join('')||
           ui.empty('Ожидаемых поступлений пока нет.')}</section>`:'';
         return heading('Планы доходов','',archived?'':ui.plus('income-new','Новый план дохода'))+
-          ui.tabs([['active','Действующие'],['archive','Архив']],archived?'archive':'active')+
-          ui.body((entries||ui.empty(archived?'Архив пуст.':'Планов доходов пока нет.'))+expected)+
+          ui.tabs([['active','Действующие'],['archive','Архив']],archived?'archive':'active').replace('fr-section-tabs','fr-section-tabs fr-income-plans-tabs')+
+          ui.body((entries||ui.empty(archived?'Архив пуст.':'Планов доходов пока нет.'))+expected+
+            (!archived?ui.actionButton('Связать записанный доход','income-link-source'):''))+
           (archived?'':'<button type="button" class="fr-primary" data-section-action="distribution">Распределение плана</button>');
       }
       case 'income-source': {
@@ -590,12 +638,13 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         return list(r.name,ui.panel(ui.pair('Ожидается',r.amount)+ui.pair('Получено в счёт плана',r.received)+ui.pair('Осталось получить',r.remaining)+
           ui.small(dateText(r.date))+(r.status==='skipped'?ui.small('Ожидание закрыто'):''))+
           (r.remaining?ui.actionButton('Записать поступление','income-receipt')+
+            (linkableIncome().length?ui.actionButton('Связать записанный доход','income-link-list'):'')+
             ui.actionButton('Больше не ожидаю','income-close'):'')+
           operationList(d.operations.filter(o=>links.includes(o.id))));
       }
       case 'income-link-list': {
-        const rows=d.operations.filter(o=>o.kind==='income'&&!o.cancelled&&!o.pending&&o.date<=date()&&freeIncome(o)>0);
-        return list('Выбрать поступление',rows.map(o=>ui.link(categoryName(o.allocations[0]?.categoryId),'income-link',o.id,ui.small(amountText(o.amount)+' · '+dateText(o.date)))).join('')||ui.empty('Поступлений пока нет.'));
+        const rows=linkableIncome();
+        return list('Выбрать поступление',rows.map(o=>ui.link(categoryName(o.allocations[0]?.categoryId),'income-link',o.id,ui.small(amountText(freeIncome(o))+' · '+dateText(o.date)))).join('')||ui.empty('Поступлений пока нет.'));
       }
       case 'payments': return renderPayments(s);
       case 'payment-detail': return paymentDetail(s);
@@ -637,10 +686,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     }
   }
 
-  function expectedIncomeRow(row) {
+  function expectedIncomeRow(row,action='income-occurrence') {
     const status=row.status==='skipped'?'Ожидание закрыто':
       row.status==='closed'||!row.remaining?'Получение завершено':row.received?'Получено частично':'Ожидается';
-    return `<button type="button" class="fr-income-event" data-section-action="income-occurrence" data-id="${esc(row.id)}">
+    return `<button type="button" class="fr-income-event" data-section-action="${action}" data-id="${esc(row.id)}">
       <span class="fr-income-event-date">${dateText(row.date)}</span><span class="fr-income-event-status">${status}</span>
       <strong class="fr-income-event-name">${esc(row.name)}</strong>
       <span class="fr-income-event-amount">${ui.small('Осталось получить')}${ui.moneyLabel(row.remaining)}</span></button>`;
@@ -896,7 +945,18 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'transfer-cancel': return confirm('Отменить перевод?', 'Остатки счетов будут пересчитаны.', 'Отменить перевод',
         'transfer.cancel',d=>cancelOperation(d,s.id),()=>{stack.pop();pop();});
-      case 'normal-income': return startOperation('income');
+      case 'normal-income': return startOperation('income',{onSaved:()=>{stack=[];exit();}});
+      case 'planned-income': return enter('income-due',{month:todayMonth()});
+      case 'income-plans-manage': return enter('income-plans',{month:todayMonth()});
+      case 'income-due-pick': return receipt(incomeRow(id),true);
+      case 'income-review-save': return s.save();
+      case 'income-link-source': return enter(name);
+      case 'income-link-source-pick': {
+        const operation=linkableIncome().find(o=>o.id===id);
+        if(operation)return enter('income-link-target',{operationId:id,month:operation.date.slice(0,7)});
+        return;
+      }
+      case 'income-link-target-pick': return linkIncome(incomeRow(id),s.operationId);
       case 'income-receipt-part': case 'income-receipt-full': return s.onChoice(name==='income-receipt-full');
       case 'income-new': return incomeForm();
       case 'income-source': case 'income-occurrence': return enter(name,{id,month:s.month});
@@ -907,12 +967,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'income-restore': return commit('income.restore',d=>income.restoreIncomePlan(d,s.id,date()));
       case 'income-receipt': return receipt(incomeRow(s.id));
       case 'income-link-list': return enter(name,{id:s.id,month:s.month,remaining:incomeRow(s.id).remaining});
-      case 'income-link': {
-        const op=doc().operations.find(o=>o.id===id);
-        const message='К ожиданию будет привязано '+amountText(Math.min(freeIncome(op),s.remaining))+'.';
-        return confirm('Привязать поступление?',message,'Привязать','income.link',
-          d=>income.linkIncome(d,s.id,id),()=>{stack.pop();pop();});
-      }
+      case 'income-link': return linkIncome(incomeRow(s.id),id);
       case 'income-close': return confirm('Больше не ожидаю', 'Оставшаяся сумма ожидания будет закрыта.', 'Закрыть ожидание',
         'income.close',d=>income.closeIncomeOccurrence(d,s.id),pop);
       case 'payment-new': return paymentForm();
@@ -1025,6 +1080,74 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   host.addEventListener('touchend',event=>finishFold(event.changedTouches[0]?.clientY),{passive:true});
   host.addEventListener('touchcancel',()=>finishFold(),{passive:true});
 
+  function layoutCategoryIsland(island) {
+    if(!island)return;
+    const tabs=[...island.querySelectorAll('[data-category-slide]')];
+    const active=categoryTypes.findIndex(([id])=>id===state().tab);
+    island.setAttribute('aria-valuenow',String(active+1));
+    island.setAttribute('aria-valuetext',categoryTypes[active][1]);
+    const width=island.clientWidth;
+    tabs.forEach((tab,index)=>{
+      const step=index-active;
+      const position=step?Math.sign(step)*(width/2+tab.offsetWidth/2-26+(Math.abs(step)-1)*width):0;
+      tab.toggleAttribute('data-current',!step);
+      tab.style.setProperty('--slide',position+'px');
+    });
+    island.style.setProperty('--highlight',tabs[active].offsetWidth+34+'px');
+  }
+  function stepCategory(island,step){
+    const s=state();
+    const next=categoryTypes[categoryTypes.findIndex(([id])=>id===s.tab)+step]?.[0];
+    if(!next)return;
+    s.tabScroll??={};
+    s.tabScroll[s.tab]=scroll().scrollTop;
+    s.tab=next;
+    s.expanded=[];
+    host.querySelector('[data-section-results]').innerHTML=categoryResults(s);
+    scroll().scrollTop=s.tabScroll[next]||0;
+    layoutCategoryIsland(island);
+  }
+  let categorySlide;
+  host.addEventListener('pointerdown',event=>{
+    const island=event.target.closest('.fr-category-carousel');
+    if(!island||!event.isPrimary||event.button!==0)return;
+    categorySlide={id:event.pointerId,x:event.clientX,y:event.clientY,drift:0,island};
+    island.setPointerCapture(event.pointerId);
+    island.classList.add('is-dragging');
+  });
+  host.addEventListener('pointermove',event=>{
+    if(categorySlide?.id!==event.pointerId)return;
+    const {island,x,y}=categorySlide;
+    const dx=event.clientX-x;
+    categorySlide.drift=Math.max(categorySlide.drift,Math.hypot(dx,event.clientY-y));
+    const i=categoryTypes.findIndex(([id])=>id===state().tab);
+    const edge=dx>0?i===0:i===categoryTypes.length-1;
+    island.style.setProperty('--drag',Math.max(-96,Math.min(96,dx*(edge ? 0.2 : 0.78)))+'px');
+  });
+  function endCategorySlide(event){
+    if(categorySlide?.id!==event.pointerId)return;
+    const {island,x,y,drift}=categorySlide;
+    categorySlide=null;
+    island.classList.remove('is-dragging');
+    island.style.removeProperty('--drag');
+    if(event.type!=='pointerup')return;
+    const dx=event.clientX-x,dy=event.clientY-y;
+    if(Math.abs(dx)>=27&&Math.abs(dx)>=Math.abs(dy))return stepCategory(island,dx<0?1:-1);
+    if(drift>9||Math.hypot(dx,dy)>9)return;
+    const highlight=island.querySelector('.fr-category-carousel-highlight').getBoundingClientRect();
+    if(x<highlight.left)stepCategory(island,-1);
+    else if(x>highlight.right)stepCategory(island,1);
+  }
+  host.addEventListener('pointerup',endCategorySlide);
+  host.addEventListener('pointercancel',endCategorySlide);
+  host.addEventListener('keydown',event=>{
+    const island=event.target.closest('.fr-category-carousel');
+    if(!island||!['ArrowLeft','ArrowRight'].includes(event.key))return;
+    event.preventDefault();
+    stepCategory(island,event.key==='ArrowRight'?1:-1);
+  });
+  new ResizeObserver(()=>layoutCategoryIsland(host.querySelector('.fr-category-carousel'))).observe(host);
+
   let hold;
   const clearHold=()=>{clearTimeout(hold?.timer);hold=null;};
   host.addEventListener('pointerdown',event=>{
@@ -1109,14 +1232,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       } else if (payments.paymentLinkInfo(doc(),id)) enter('payment-record',{id});
       else {remember();openOperation(id);}
     },
-    categorySwipe(delta){
-      const s=state(),tabs=['expense','income','savings'];
-      if(s?.page!=='categories')return;
-      const next=tabs[tabs.indexOf(s.tab)+delta];
-      if(next)action('tab',next);
-    },
     fundExpense:(id,amount,done)=>transferForm('',id,null,{amount,done}),
-    hasDueIncome:()=>pendingIncome().length>0,
     newAccount,
     busy:()=>busy,
     dirty:()=>stack.some(dirty),
@@ -1133,6 +1249,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     restore() {
       if (scroll()) scroll().scrollTop=state().scroll;
       if (['distribution','share-detail'].includes(state().page)) updateShare(state());
+      layoutCategoryIsland(host.querySelector('.fr-category-carousel'));
     }
   };
 }
