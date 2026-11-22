@@ -23,6 +23,12 @@ export async function boot() {
 }
 
 export const document = () => engine.document;
+export const exportBackup = password => engine.exportLocalBackup(password);
+export const restoreBackup = (file,password) => engine.restoreLocalBackup(file,password);
+export const resetPreview = mode => engine.resetPreview(mode);
+export const prepareReset = (intent,file,password) => engine.prepareLocalReset(intent,file,password);
+export const applyReset = (proof,phrase) => engine.resetData(proof,phrase);
+export const discardReset = () => engine.discardReset();
 export const mutate = (action, fn) => engine.mutate(action,fn);
 export const fact = range => totals(document(),range);
 export const addOperationCategory = entry => engine.mutate('category.add',doc=>addCategory(doc,entry));

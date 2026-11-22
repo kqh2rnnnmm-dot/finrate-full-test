@@ -6,7 +6,7 @@ export const RESET_MODES=Object.freeze({
  categories:{title:'Очистить данные и категории',word:'ОЧИСТИТЬ КАТЕГОРИИ',action:'Очистить данные и категории'},
  all:{title:'Полный сброс FinRate',word:'СБРОСИТЬ FINRATE',action:'Удалить все данные'}
 });
-const rootKeys=new Set(['schema','datasetId','currency','createdAt','updatedAt','revision','accounts','categories','operations','events','drafts','operationEdits','categoryEdits','accountEdits','settings','planning','payments','debts','goals','limits']);
+const rootKeys=new Set(['schema','datasetId','currency','createdAt','updatedAt','revision','accounts','categories','operations','events','drafts','operationEdits','categoryEdits','accountEdits','settings','planning','payments','debts','goals','limits','monthBudget']);
 const settingKeys=new Set(['defaultOperation','theme','autoLock','lastAccountId','appearance','topPalette','bottomPalette','homeTiles','homeTileStyle','edgeSide','colorPalette','notificationsEnabled','financialNotifications','systemNotifications','limitEarlyWarnings','limitWarningPercent']);
 const known=(object,keys)=>Object.keys(object||{}).every(k=>keys.has(k));
 export function assertResetMode(mode){if(!Object.hasOwn(RESET_MODES,mode))fail('FORMAT');}
@@ -24,6 +24,8 @@ export function clearedDocument(d,mode){
  if(mode==='financial'){
   n.categories=copy(d.categories);n.settings=copy(d.settings);n.settings.lastAccountId=null;
   n.settings.homeTiles=d.settings.homeTiles.map(t=>({metric:t.metric==='credit'?'account':t.metric}));
+  if(d.monthBudget)n.monthBudget={rates:[],goals:[],assignments:[],
+    excludeSavings:d.monthBudget.excludeSavings,step:d.monthBudget.step};
  }else Object.assign(n.settings,uiPreferences(),{edgeSide:'right',homeTileStyle:'numbers'});
  n.settings.autoLock=d.settings.autoLock;
  n.planning={...defaultPlanning(),mode:mode==='financial'?planningMode(d):'month',onboarding:'skipped'};

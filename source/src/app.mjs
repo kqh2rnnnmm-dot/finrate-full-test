@@ -26,7 +26,7 @@ const doc=ledger.document;
 const listNode=()=>host.querySelector('.fr-operation-list,.np-body');
 function move(to) { route=to;render(); }
 function resetDraft(){onOperationSaved=null;categoryRoot='';fixedAccount='';accountChoice='';draft=null;previous=null;initial=null;editing=false;error='';leave=null;}
-const sectionRoutes=new Set(['summary','accounts','categories','transfer','payments','income-plans','savings','budget-settings']);
+const sectionRoutes=new Set(['summary','accounts','categories','transfer','payments','income-plans','savings','budget-settings','data-management']);
 const sections=createSections(host,{
   redraw:()=>move('section'),
   exit:()=>{

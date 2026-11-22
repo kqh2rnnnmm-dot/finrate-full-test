@@ -15,7 +15,7 @@ export const actionButton = (label,action) => `<button type="button" class="fr-s
 export const tabs = (items,current) => `<div class="fr-section-tabs">${items.map(([id,label])=>`<button type="button" data-section-action="tab" data-id="${id}" aria-pressed="${id===current}">${esc(label)}</button>`).join('')}</div>`;
 const decimal = value => String(value ?? '').replace('.',',');
 const option = (value,label,selected) => `<option value="${esc(value)}" ${String(selected)===String(value)?'selected':''}>${esc(label)}</option>`;
-export function field({key,label,type='text',options,placeholder='',required=true,maxlength=100},value) {
+export function field({key,label,type='text',options,placeholder='',required=true,maxlength=100,min,max},value) {
   if(type==='account-picker'){
     const account=options.find(([id])=>id===value&&id);
     const [id,name,mark]=account||[];
@@ -26,14 +26,14 @@ export function field({key,label,type='text',options,placeholder='',required=tru
     ? `<select name="${key}" ${required?'required':''}>${options.map(([id,label])=>option(id,label,value)).join('')}</select>`
     : type==='checkbox'
       ? `<input type="checkbox" name="${key}" ${value?'checked':''}>`
-      : `<input type="${type==='money'?'text':type}" ${type==='money'?'inputmode="decimal" data-decimal':''} name="${key}" value="${esc(type==='money'?decimal(value):value)}" placeholder="${esc(placeholder)}" maxlength="${maxlength}" ${required?'required':''} autocomplete="off">`;
+      : `<input type="${type==='money'?'text':type}" ${type==='money'?'inputmode="decimal" data-decimal':''} name="${key}" ${type==='file'?'accept=".json,application/json"':`value="${esc(type==='money'?decimal(value):value)}"`} ${min?`min="${esc(min)}"`:''} ${max?`max="${esc(max)}"`:''} placeholder="${esc(placeholder)}" maxlength="${maxlength}" ${required?'required':''} autocomplete="off">`;
   return `<label class="fr-section-field ${type==='checkbox'?'fr-check-field':''}"><span>${esc(label)}</span>${control}</label>`;
 }
 
-export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside='',insideBefore=''}) {
+export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside='',insideBefore='',danger=false}) {
   return heading(title)+`<form class="fr-section-form" data-section-form><div class="np-body" data-section-scroll>${insideBefore}${
     fields.map(f=>field(f,values[f.key])).join('')
-  }${inside}<p class="fr-create-error" role="alert">${esc(error)}</p></div><button type="submit" class="fr-primary" ${busy?'disabled':''}>${esc(submitLabel)}</button></form>`;
+  }${inside}<p class="fr-create-error" role="alert">${esc(error)}</p></div><button type="submit" class="fr-primary ${danger?'fr-cancel-confirm':''}" ${busy?'disabled':''}>${esc(submitLabel)}</button></form>`;
 }
 
 export function monthControl(month) {
@@ -66,7 +66,7 @@ export function goalProgress(goal) {
 export function shareScreen(state,categories,plan,step) {
   const settings=state.single?'':`<button type="button" class="fr-category-new" data-section-action="slider-step" aria-label="Шаг ползунка">${icon('settings')}</button>`;
   return heading(state.title,'',settings)+`<div class="np-island fr-share-totals">
-    <div class="np-row fr-share-free"><span>Свободно к распределению</span><strong data-share-free></strong></div>
+    <div class="np-row fr-share-free"><span>Свободно к<br>распределению</span><strong data-share-free></strong></div>
     <div class="fr-budget-bar fr-budget-bar--wide" aria-hidden="true"><span data-share-bar></span></div>
     <div class="np-row fr-share-caption"><span>Распределено</span><span data-share-total></span></div>
     <div class="np-row fr-share-basis"><span>Свободно по плану</span><strong class="np-money" data-share-free-amount></strong></div>

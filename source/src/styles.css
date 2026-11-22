@@ -514,12 +514,20 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-summary-category:not(:has(.fr-budget-bar)) .np-link{padding-bottom:0;min-height:44px}
 #finrate .fr-summary-category:not(:has(.fr-budget-bar)) .fr-muted{margin-top:0}
 #finrate .fr-display-setting h2{margin:0 0 10px;font-size:15px;color:var(--dim)}
-#finrate .fr-display-toggle{display:grid;grid-template-columns:minmax(0,1fr) auto;text-align:left;align-items:center;gap:12px;width:100%;min-height:52px;padding:10px 12px;border:0;border-radius:16px;background:var(--panel);font-size:16px}
-#finrate .fr-display-toggle span{padding:5px 8px;border-radius:10px;background:var(--soft);font-size:14px}
-#finrate .fr-display-toggle[aria-checked=true] span{background:var(--palette-11);color:var(--palette-12)}
+#finrate .fr-display-toggle{display:grid;grid-template-columns:minmax(0,1fr) 52px;text-align:left;align-items:center;gap:16px;width:100%;min-height:64px;padding:0;border:0;background:none;color:var(--ink);font-size:18px;line-height:1.4}
+#finrate .fr-display-toggle span{position:relative;width:52px;height:32px;border-radius:18px;background:var(--soft);transition:background .2s}
+#finrate .fr-display-toggle span::before{content:'';position:absolute;left:3px;top:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0002;transition:transform .2s}
+#finrate .fr-display-toggle[aria-checked=true] span{background:#0867d4}
+#finrate .fr-display-toggle[aria-checked=true] span::before{transform:translateX(20px)}
+@media(prefers-color-scheme:dark){
+  #finrate .fr-display-toggle[aria-checked=true] span{background:#387df2}
+}
+@media(prefers-reduced-motion:reduce){
+  #finrate .fr-display-toggle span,#finrate .fr-display-toggle span::before{transition:none}
+}
 
-#finrate .fr-share-free{gap:6px 12px;margin-top:4px;font-size:15px}
-#finrate .fr-share-free strong{font-size:26px;white-space:nowrap}
+#finrate .fr-share-free{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:12px;margin-top:4px;font-size:16px;line-height:1.25}
+#finrate .fr-share-free strong{min-width:5.75ch;text-align:end;font-size:26px;white-space:nowrap;font-variant-numeric:tabular-nums}
 #finrate .fr-share-basis{border-top:1px solid var(--line);padding-top:8px;margin:10px 0 0;font-size:15px}
 #finrate .fr-share-room{margin:10px 0 0;font-size:15px;color:var(--dim)}
 #finrate .fr-share-values [data-share-amount]{display:block;font-size:18px;margin-top:3px}
@@ -639,3 +647,5 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 @media(prefers-reduced-motion:reduce){
   #finrate .fr-category-carousel-highlight,#finrate .fr-category-carousel-rail,#finrate .fr-category-carousel-rail span{transition:none}
 }
+
+#finrate .fr-backup-download{display:flex;align-items:center;justify-content:center;text-decoration:none}

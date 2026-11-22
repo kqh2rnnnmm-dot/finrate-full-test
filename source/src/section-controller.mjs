@@ -59,6 +59,10 @@ const errors = {
   STALE:'Данные изменились в другой вкладке. Откройте приложение заново.', EDIT_STALE:'Запись изменилась. Откройте её заново.',
   PAYMENT_AMOUNT:'Проверьте сумму и выберите частичную или полную оплату.',
   PAYMENT_DATE:'Проверьте дату оплаты.', PAYMENT_LINK:'Сумма или категория противоречит связанной оплате.',
+  CONFIRM:'Введите указанную фразу подтверждения.',
+  BACKUP_MISMATCH:'Копия не соответствует текущим данным. Сохраните новую копию.',
+  DECRYPT:'Не удалось открыть копию. Проверьте пароль.',
+  PASSWORD:'Пароль копии должен содержать от 12 до 1024 символов.',
   PLAN_LINK:'Этот доход уже распределён по ожиданиям или ожидание закрыто.'
 };
 
@@ -78,6 +82,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   }
   function pop() {
     const closed=stack.pop();
+    if(closed?.download)URL.revokeObjectURL(closed.download);
+    if(closed?.page==='reset-review')ledger.discardReset();
     if (closed?.returnTo) return closed.returnTo();
     if (stack.length) redraw();
     else exit();
@@ -100,7 +106,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const values = Object.fromEntries(fields.map(f=>[f.key, defaults[f.key] ?? (f.type==='checkbox'?false:'')]));
     enter('form',{title,fields,values,save,initial:JSON.stringify(values),...options});
   }
-  async function commit(action,fn,done=pop) {
+  async function commit(action,fn,done=pop,apply=ledger.mutate) {
     if (busy) return;
     remember();
     const current = state();
@@ -108,7 +114,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     current.error = '';
     redraw();
     try {
-      await ledger.mutate(action,fn);
+      await apply(action,fn);
       busy = false;
       done();
     } catch (error) {
@@ -118,6 +124,32 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     }
   }
   const confirm = (title,message,submitLabel,action,fn,done) => enter('confirm',{title,message,submitLabel,action,fn,done});
+  const monthLabel=month=>new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'})
+    .format(new Date(month+'-01T00:00:00Z')).replace(/ г\.$/,'');
+  const backupPassword={key:'password',label:'Пароль копии',type:'password',maxlength:1024};
+  const backupFile={key:'backup',label:'Файл резервной копии',type:'file'};
+  const clearPhrase=mode=>mode==='all'?'СБРОСИТЬ FINRATE':'ОЧИСТИТЬ ФИНАНСЫ';
+  const clearTitle=mode=>mode==='all'?'Полный сброс FinRate':'Очистить финансовые данные';
+  const clearConsequences=mode=>mode==='all'?'Будут удалены счета, операции, планы, накопления, категории, настройки и внутренняя история. Внешний файл копии останется у вас.':
+    'Будут удалены счета, операции, планы, накопления и история. Категории и настройки сохранятся. Внешний файл копии останется у вас.';
+  function dataTask(fn,done){
+    return commit('data.management',null,done,fn);
+  }
+  function verifyReset(s){
+    form('Проверить резервную копию',[backupFile,backupPassword],{},v=>{
+      const {backup,password}=v;
+      v.password='';
+      let proof;
+      return dataTask(async()=>{proof=await ledger.prepareReset(s.intent,backup,password);},()=>{
+        const phrase=clearPhrase(s.mode);
+        form('Подтвердить сброс',[text('confirmation','Введите '+phrase)],{},v=>{
+          if(v.confirmation.trim()!==phrase)fail('CONFIRM');
+          return dataTask(()=>ledger.applyReset(proof,phrase),()=>location.reload());
+        },{submitLabel:'Удалить данные',danger:true,
+          insideBefore:ui.panel('<p>Копия проверена. '+clearConsequences(s.mode)+'</p>')});
+      });
+    },{submitLabel:'Проверить копию',insideBefore:ui.panel('<p>Выберите сохранённый файл и введите его пароль.</p>')});
+  }
   const editBase = op => ({editId:op.id,editBase:JSON.stringify(op)});
 
   function openShare(id) {
@@ -376,12 +408,16 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   }
 
   const operationList = rows => operationRows(doc(),rows);
-  const pendingIncome = month => {
-    const d=doc();
-    const first=month+'-01';
-    const from=month===todayMonth()?(d.planning?.incomes||[]).reduce((earliest,plan)=>plan.start<earliest?plan.start:earliest,first):first;
-    return income.incomeOccurrences(d,from,budget.monthEnd(month)).filter(row=>row.remaining>0);
-  };
+  const incomeForMonth = month => income.incomeOccurrences(doc(),month+'-01',budget.monthEnd(month));
+
+  function nextOpenIncome(month) {
+    let next=month;
+    for(let offset=0;offset<12&&next!=='9999-12';offset++){
+      next=budget.nextBudgetMonth(next);
+      const row=incomeForMonth(next).find(row=>row.remaining>0);
+      if(row)return row;
+    }
+  }
   const freeIncome = op => op.amount-(doc().planning?.links||[])
     .filter(l=>l.operationId===op.id).reduce((sum,l)=>sum+l.amount,0);
   const linkableIncome = () => doc().operations.filter(o=>o.kind==='income'&&!o.cancelled&&!o.pending&&o.date<=date()&&freeIncome(o)>0);
@@ -389,7 +425,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const operation=linkableIncome().find(o=>o.id===operationId);
     if(!row?.remaining||!operation)return;
     const amount=Math.min(freeIncome(operation),row.remaining);
-    return confirm('Связать с планом?',amountText(amount)+' будет учтено по плану «'+row.name+'». Остаток на счёте не изменится.',
+    return confirm('Связать с планом?',amountText(amount)+' будет учтено по плану «'+row.name+'» на '+dateText(row.date)+
+      '. Дата записи — '+dateText(operation.date)+'. Остаток на счёте не изменится.',
       'Связать доход','income.link',d=>income.linkIncome(d,row.id,operationId),()=>{stack.pop();pop();});
   }
   function paymentDetail(s) {
@@ -411,10 +448,9 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     switch (s.page) {
       case 'summary': return ui.summary(s.month,budget.monthlyOverview(d,s.month));
       case 'received': {
-        const from=s.month+'-01',to=budget.monthEnd(s.month);
-        const rows=d.operations.filter(o=>o.kind==='income'&&!o.cancelled&&!o.pending&&o.date.startsWith(s.month));
-        const period=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(from+'T00:00Z'));
-        return list('Получено',ui.amountOverview(ledger.fact({from,to}).income,{caption:period})+operationList(rows));
+        const rows=d.operations.filter(o=>o.date.startsWith(s.month)&&o.kind==='income'&&!o.cancelled&&!o.pending);
+        const period=monthLabel(s.month);
+        return list('Получено',ui.amountOverview(rows.reduce((sum,op)=>sum+op.amount,0),{caption:period})+operationList(rows));
       }
       case 'money': {
         const values=budget.availableMoney(d),{excludeSavings}=budget.budgetPreferences(d);
@@ -423,13 +459,32 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
             excludeSavings&&values.reserved?-values.reserved:values.reserved)+
           ui.link('Накопления','savings')+ui.link('Настройки сводки','budget-settings'));
       }
+      case 'data-management':
+        return list('Управление данными',ui.actionButton('Сохранить резервную копию','backup-export')+
+          ui.actionButton('Восстановить из копии','backup-restore')+
+          ui.actionButton('Очистить финансовые данные','reset-financial')+
+          ui.actionButton('Полный сброс FinRate','reset-all')+(s.error?ui.empty(s.error):''));
+      case 'backup-ready':
+        return list('Резервная копия',ui.panel('<p>Сохраните файл и запомните пароль копии. Он понадобится для восстановления.</p>')+
+          `<a class="fr-section-secondary fr-backup-download" href="${esc(s.download)}" download="FinRate-${date()}.json">Скачать резервную копию</a>`);
+      case 'reset-review':
+        return list(clearTitle(s.mode),ui.panel('<p>'+clearConsequences(s.mode)+'</p>'+
+          ui.small('Счетов: '+s.intent.summary.accounts+' · операций: '+s.intent.summary.operations))+
+          ui.actionButton('Подготовить копию','backup-export')+ui.actionButton('Проверить сохранённую копию','reset-verify'));
+      case 'summary-range': {
+        const to=budget.monthEnd(s.month);
+        const report=ledger.fact({from:s.from,to});
+        return list('Сводка с даты',ui.small(dateText(s.from)+' — '+dateText(to))+
+          ui.panel(ui.pair('Доходы',report.income)+ui.pair('Расходы',report.expense)+ui.pair('Доходы минус расходы',report.result))+
+          ui.actionButton('Изменить дату','summary-range-filter')+ui.actionButton('Весь месяц','summary-range-close'));
+      }
       case 'budget-settings': {
         const {excludeSavings}=budget.budgetPreferences(d);
         return list('Настройки сводки',
           `<section class="fr-display-setting"><h2>Расчёт доступной суммы</h2>
             <button type="button" class="fr-display-toggle" role="switch" aria-checked="${!excludeSavings}"
               data-section-action="toggle-savings">Показывать накопления в результате месяца
-              <span aria-hidden="true">${excludeSavings?'Выкл.':'Вкл.'}</span></button></section>`+(s.error?ui.empty(s.error):''));
+              <span aria-hidden="true"></span></button></section>`+ui.link('Сводка с даты','summary-range-filter')+(s.error?ui.empty(s.error):''));
       }
       case 'form-accounts': {
         const selected=currentAccount(s.accountId);
@@ -588,9 +643,14 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'income-due':
       case 'income-link-target': {
         const linking=s.page==='income-link-target';
-        return list('Запланированные доходы',ui.monthControl(s.month)+
-          (pendingIncome(s.month).map(row=>expectedIncomeRow(row,linking?'income-link-target-pick':'income-due-pick')).join('')||
-          ui.empty('На этот месяц нет открытых ожиданий. Можно выбрать другой месяц.'))+
+        const occurrences=incomeForMonth(s.month);
+        const rows=occurrences.filter(row=>row.remaining>0);
+        const next=rows.length?null:nextOpenIncome(s.month);
+        const caption=linking?ui.small('Выберите месяц плана. Дата зачисления не изменится.'):'';
+        return list('Запланированные доходы',ui.monthControl(s.month)+caption+
+          (rows.map(row=>expectedIncomeRow(row,linking?'income-link-target-pick':'income-due-pick')).join('')||
+          ui.empty(occurrences.length?'Все ожидания этого месяца уже закрыты.':'На этот месяц нет запланированных поступлений.'))+
+          (next?ui.link('Следующее ожидание','income-show-month',next.date.slice(0,7),ui.small(next.name+' · '+dateText(next.date))):'')+
           (linking?'':ui.actionButton('Планы доходов','income-plans-manage')));
       }
       case 'income-review': {
@@ -613,7 +673,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'income-plans': {
         const archived=s.tab==='archive';
         const plans=(d.planning?.incomes||[]).filter(p=>p.archived===archived&&!p.deletedAt);
-        const rows=archived?[]:income.incomeOccurrences(d,s.month+'-01',budget.monthEnd(s.month));
+        const rows=archived?[]:incomeForMonth(s.month);
         const entries=plans.map(p=>`<button type="button" class="fr-income-plan-row" data-section-action="income-source" data-id="${esc(p.id)}">
           <span><strong>${esc(p.name)}</strong>${ui.small(incomeSchedule(p))}</span>
           <span>${ui.small('По плану')}${ui.moneyLabel(p.amount)}</span></button>`).join('');
@@ -628,7 +688,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'income-source': {
         const p=d.planning.incomes.find(p=>p.id===s.id);
-        return list(p.name,ui.panel(ui.pair('План',p.amount)+ui.small(RECURRENCES[p.repeat]||p.repeat))+
+        return list(p.name,ui.panel(ui.pair('План',p.amount)+ui.small(incomeSchedule(p))+ui.small('План действует с '+dateText(p.start)))+
           (p.archived?ui.actionButton('Восстановить','income-restore'):ui.actionButton('Изменить','income-edit')+
             ui.actionButton('В архив','income-stop'))+(s.error?ui.empty(s.error):''));
       }
@@ -681,7 +741,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'form': return ui.formScreen({...s,busy,fields:visibleFields(s)});
       case 'discard': return unsaved('data-section-action','resume','discard');
-      case 'confirm': return list(s.title,ui.panel(`<p>${esc(s.message)}</p>`)+ui.actionButton(s.submitLabel,'confirm')+
+      case 'confirm':
+        return list(s.title,ui.panel(`<p>${esc(s.message)}</p>`)+ui.actionButton(s.submitLabel,'confirm')+
         (s.error?ui.empty(s.error):''));
     }
   }
@@ -836,6 +897,34 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'resume': return pop();
       case 'discard': stack.pop();return pop();
       case 'confirm': return commit(s.action,s.fn,s.done||pop);
+      case 'summary-range-filter': {
+        const first=s.month+'-01', last=budget.monthEnd(s.month);
+        return form('Сводка с даты',[{...day('from','Начало периода'),min:first,max:last}],{from:s.from||first},v=>{
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(v.from)||v.from<first||v.from>last)fail('SELECTION');
+          stack.pop();
+          if(s.page==='summary-range'){s.from=v.from;return redraw();}
+          return enter('summary-range',{month:s.month,from:v.from,settings:s});
+        },{submitLabel:'Показать'});
+      }
+      case 'summary-range-close':
+        if(stack.at(-2)?.page==='budget-settings'&&stack.at(-3)?.page==='summary')stack.pop();
+        return pop();
+      case 'backup-export': return form('Сохранить резервную копию',[backupPassword],{},v=>{
+        const password=v.password;v.password='';
+        let file;
+        return dataTask(async()=>{file=await ledger.exportBackup(password);},
+          ()=>{stack.pop();enter('backup-ready',{download:URL.createObjectURL(file)});});
+      },{submitLabel:'Подготовить копию',insideBefore:ui.panel('<p>Задайте пароль копии, минимум 12 символов.</p>')});
+      case 'backup-restore': return form('Восстановить из копии',[backupFile,backupPassword],{},v=>{
+        const {backup,password}=v;v.password='';
+        return dataTask(()=>ledger.restoreBackup(backup,password),()=>location.reload());
+      },{submitLabel:'Заменить данные',danger:true,insideBefore:ui.panel('<p>Данные из копии заменят текущие данные приложения.</p>')});
+      case 'reset-financial': case 'reset-all': {
+        const mode=name==='reset-all'?'all':'financial';
+        let intent;
+        return dataTask(async()=>{intent=await ledger.resetPreview(mode);},()=>enter('reset-review',{mode,intent}));
+      }
+      case 'reset-verify': return verifyReset(s);
       case 'received': return enter('received',{month:s.month});
       case 'budget-settings': return enter('budget-settings',{month:s.month||todayMonth()});
       case 'money': return enter('money');
@@ -948,6 +1037,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'normal-income': return startOperation('income',{onSaved:()=>{stack=[];exit();}});
       case 'planned-income': return enter('income-due',{month:todayMonth()});
       case 'income-plans-manage': return enter('income-plans',{month:todayMonth()});
+      case 'income-show-month': s.month=id;s.scroll=0;return redraw();
       case 'income-due-pick': return receipt(incomeRow(id),true);
       case 'income-review-save': return s.save();
       case 'income-link-source': return enter(name);
@@ -1204,7 +1294,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       const signed=input.name==='opening'&&s.values.kind==='credit';
       input.value=input.value.replace(signed?/[^\d,.-]/g:/[^\d,.]/g,'');
     }
-    s.values[input.name]=input.type==='checkbox'?input.checked:input.value;
+    s.values[input.name]=input.type==='checkbox'?input.checked:input.type==='file'?input.files[0]:input.value;
     if ((s.dynamic==='account'&&['kind','mode'].includes(input.name))||(s.dynamic==='income'&&input.name==='repeat')){
       remember();redraw();host.querySelector(`[name="${input.name}"]`)?.focus({preventScroll:true});
     }

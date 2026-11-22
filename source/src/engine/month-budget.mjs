@@ -212,7 +212,7 @@ export function closeSavings(d,id,date) {
 
 export function monthlyOverview(d,month) {
   const from = month+'-01', to = monthEnd(month);
-  const fact = totals(d,{from,to});
+  const fact=totals(d,{from,to});
   const expected = sum(incomeOccurrences(d,from,to).map(r=>r.amount));
   const receipts=plannedReceipts(d).filter(receipt=>receipt.date>=from&&receipt.date<=to);
   const planned=sum(receipts.map(receipt=>receipt.amount));
