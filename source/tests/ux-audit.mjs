@@ -246,11 +246,18 @@ async function audit(browser,view,theme,version){
 
     await page.goto(url);
     await page.locator('[data-entry=income]').click();
-    await heading('Ожидаемые доходы');
-    assert.ok(await section('income-occurrence','salary-plan:2026-11').count());
-    await section('income-occurrence','salary-plan:2026-11').click();
-    await heading('Зарплата');
-    await back();await heading('Ожидаемые доходы');
+    if(before){
+      await heading('Ожидаемые доходы');
+      await section('income-occurrence','salary-plan:2026-11').click();
+      await heading('Зарплата');
+      await back();await heading('Ожидаемые доходы');
+    }else{
+      await button('Записать запланированный доход').click();
+      await heading('Запланированные доходы');
+      await section('income-due-pick','salary-plan:2026-11').click();
+      await heading('Записать поступление');
+      await back();await heading('Запланированные доходы');
+    }
     assert.deepEqual(errors,[]);
     console.log('PASS UX',version,view.width,theme,shots,'captures, navigation, focus and console');
   }finally{
