@@ -58,6 +58,7 @@ try{
     async function shot(name,target=page){
       await target.locator('.fr-app').screenshot({path:`${results}/${width}-${colorScheme}-${name}.png`,animations:'disabled'});
     }
+    await page.clock.setFixedTime(new Date(2026,10,22,12));
     await fixture(page,origin+scope,'regression');
     await page.goto(origin+scope);
     await button('Сводка').waitFor();
@@ -76,6 +77,16 @@ try{
     await button('Следующий месяц').click();
     assert.equal(await page.locator('.fr-month-title').innerText(),monthName);
     await section('budget-settings').click();
+    const savingsSwitch=page.getByRole('switch',{name:'Показывать накопления в результате месяца'});
+    const toggleBefore=await savingsSwitch.getAttribute('aria-checked');
+    const thumbPosition=()=>savingsSwitch.locator('span').evaluate(el=>getComputedStyle(el,'::before').transform);
+    const thumbBefore=await thumbPosition();
+    await savingsSwitch.click();
+    await page.waitForFunction(previous=>document.querySelector('[data-section-action=toggle-savings]').getAttribute('aria-checked')!==previous,toggleBefore);
+    assert.notEqual(await thumbPosition(),thumbBefore);
+    await savingsSwitch.click();
+    await page.waitForFunction(previous=>document.querySelector('[data-section-action=toggle-savings]').getAttribute('aria-checked')===previous,toggleBefore);
+
     assert.equal(await section('distribution').count(),0);
     assert.equal(await section('income-plans').count(),0);
     assert.equal(await section('slider-step').count(),0);
@@ -182,6 +193,21 @@ try{
     await select('step','5');
     await submit();
     assert.equal(await page.locator('[data-share-slider]').first().getAttribute('step'),'5');
+    const row=page.locator('.fr-share-free');
+    async function shareLayout(){
+      return row.evaluate(row=>{
+        const [label,number]=[...row.children].map(el=>el.getBoundingClientRect());
+        const bar=row.nextElementSibling.getBoundingClientRect();
+        return {height:label.height,bar:bar.top,gap:number.left-label.right,font:getComputedStyle(row).fontSize};
+      });
+    }
+    const originalLayout=await shareLayout();
+    for(const percent of ['100','0','0,01','37,89']){
+      await fillShare('Продукты',percent);
+      assert.deepEqual(await shareLayout(),originalLayout);
+    }
+    assert.ok(originalLayout.gap>=10);
+    assert.equal(originalLayout.font,'16px');
     await fillShare('Продукты','100');
     assert.equal(await button('Сохранить').isEnabled(),true);
     await fillShare('Продукты','0');
@@ -370,6 +396,8 @@ try{
     await fill('amount','1000');
     await select('categoryId','salary');
     await select('accountId','cash');
+    await select('day','25');
+    await fill('start','2026-10-01');
     await submit();
     await title('Планы доходов');
     await shot('income-plans-app');
@@ -418,10 +446,11 @@ try{
     const snapshot=()=>fixture(inspect,origin+scope);
     await page.locator('[data-entry=income]').tap();
     await button('Другой доход').click();
-    for(const digit of '120')await button(digit).click();
+    for(const digit of '1120')await button(digit).click();
     await button('Далее').click();
     await button('Аванс').click();
-    await button('Сегодня').click();
+    await button('Предыдущий месяц').click();
+    await page.locator('[data-date="2026-10-24"]').click();
     await button('Далее').click();
     await button('Сохранить').click();
     await button('Сводка').waitFor();
@@ -430,7 +459,11 @@ try{
     await menu('Планы и отчёты','Планы доходов');
     await button('Связать записанный доход').click();
     await section('income-link-source-pick').filter({hasText:'Аванс'}).click();
-    await section('income-link-target-pick').first().click();
+    await section('income-link-target-pick').filter({hasText:'25 октября'}).click();
+    await button('Связать доход').click();
+    await section('income-link-source-pick').filter({hasText:'Аванс'}).click();
+    await button('Следующий месяц').click();
+    await section('income-link-target-pick').filter({hasText:'25 ноября'}).click();
     await button('Связать доход').click();
     await page.getByText('Нет записанных доходов, которые можно связать.').waitFor();
     const afterLink=await snapshot();
@@ -440,7 +473,7 @@ try{
 
     await page.locator('[data-entry=income]').tap();
     await button('Записать запланированный доход').click();
-    await section('income-due-pick').first().click();
+    await section('income-due-pick').filter({hasText:'25 ноября'}).click();
     assert.equal(await page.locator('[name=amount]').inputValue(),'880');
     await fill('amount','400');
     await submit();
@@ -449,7 +482,7 @@ try{
     await button('Сводка').waitFor();
     await page.locator('[data-entry=income]').tap();
     await button('Записать запланированный доход').click();
-    await section('income-due-pick').first().click();
+    await section('income-due-pick').filter({hasText:'25 ноября'}).click();
     assert.equal(await page.locator('[name=amount]').inputValue(),'480');
     await submit();
     await section('income-review-save').click();

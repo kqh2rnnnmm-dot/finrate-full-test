@@ -66,7 +66,7 @@ export function goalProgress(goal) {
 export function shareScreen(state,categories,plan,step) {
   const settings=state.single?'':`<button type="button" class="fr-category-new" data-section-action="slider-step" aria-label="Шаг ползунка">${icon('settings')}</button>`;
   return heading(state.title,'',settings)+`<div class="np-island fr-share-totals">
-    <div class="np-row fr-share-free"><span>Свободно к распределению</span><strong data-share-free></strong></div>
+    <div class="np-row fr-share-free"><span>Свободно к<br>распределению</span><strong data-share-free></strong></div>
     <div class="fr-budget-bar fr-budget-bar--wide" aria-hidden="true"><span data-share-bar></span></div>
     <div class="np-row fr-share-caption"><span>Распределено</span><span data-share-total></span></div>
     <div class="np-row fr-share-basis"><span>Свободно по плану</span><strong class="np-money" data-share-free-amount></strong></div>

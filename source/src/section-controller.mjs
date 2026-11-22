@@ -376,12 +376,16 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   }
 
   const operationList = rows => operationRows(doc(),rows);
-  const pendingIncome = month => {
-    const d=doc();
-    const first=month+'-01';
-    const from=month===todayMonth()?(d.planning?.incomes||[]).reduce((earliest,plan)=>plan.start<earliest?plan.start:earliest,first):first;
-    return income.incomeOccurrences(d,from,budget.monthEnd(month)).filter(row=>row.remaining>0);
-  };
+  const incomeForMonth = month => income.incomeOccurrences(doc(),month+'-01',budget.monthEnd(month));
+
+  function nextOpenIncome(month) {
+    let next=month;
+    for(let offset=0;offset<12&&next!=='9999-12';offset++){
+      next=budget.nextBudgetMonth(next);
+      const row=incomeForMonth(next).find(row=>row.remaining>0);
+      if(row)return row;
+    }
+  }
   const freeIncome = op => op.amount-(doc().planning?.links||[])
     .filter(l=>l.operationId===op.id).reduce((sum,l)=>sum+l.amount,0);
   const linkableIncome = () => doc().operations.filter(o=>o.kind==='income'&&!o.cancelled&&!o.pending&&o.date<=date()&&freeIncome(o)>0);
@@ -389,7 +393,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const operation=linkableIncome().find(o=>o.id===operationId);
     if(!row?.remaining||!operation)return;
     const amount=Math.min(freeIncome(operation),row.remaining);
-    return confirm('Связать с планом?',amountText(amount)+' будет учтено по плану «'+row.name+'». Остаток на счёте не изменится.',
+    return confirm('Связать с планом?',amountText(amount)+' будет учтено по плану «'+row.name+'» на '+dateText(row.date)+
+      '. Дата записи — '+dateText(operation.date)+'. Остаток на счёте не изменится.',
       'Связать доход','income.link',d=>income.linkIncome(d,row.id,operationId),()=>{stack.pop();pop();});
   }
   function paymentDetail(s) {
@@ -429,7 +434,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           `<section class="fr-display-setting"><h2>Расчёт доступной суммы</h2>
             <button type="button" class="fr-display-toggle" role="switch" aria-checked="${!excludeSavings}"
               data-section-action="toggle-savings">Показывать накопления в результате месяца
-              <span aria-hidden="true">${excludeSavings?'Выкл.':'Вкл.'}</span></button></section>`+(s.error?ui.empty(s.error):''));
+              <span aria-hidden="true"></span></button></section>`+(s.error?ui.empty(s.error):''));
       }
       case 'form-accounts': {
         const selected=currentAccount(s.accountId);
@@ -588,9 +593,14 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'income-due':
       case 'income-link-target': {
         const linking=s.page==='income-link-target';
-        return list('Запланированные доходы',ui.monthControl(s.month)+
-          (pendingIncome(s.month).map(row=>expectedIncomeRow(row,linking?'income-link-target-pick':'income-due-pick')).join('')||
-          ui.empty('На этот месяц нет открытых ожиданий. Можно выбрать другой месяц.'))+
+        const occurrences=incomeForMonth(s.month);
+        const rows=occurrences.filter(row=>row.remaining>0);
+        const next=rows.length?null:nextOpenIncome(s.month);
+        const caption=linking?ui.small('Выберите месяц плана. Дата зачисления не изменится.'):'';
+        return list('Запланированные доходы',ui.monthControl(s.month)+caption+
+          (rows.map(row=>expectedIncomeRow(row,linking?'income-link-target-pick':'income-due-pick')).join('')||
+          ui.empty(occurrences.length?'Все ожидания этого месяца уже закрыты.':'На этот месяц нет запланированных поступлений.'))+
+          (next?ui.link('Следующее ожидание','income-show-month',next.date.slice(0,7),ui.small(next.name+' · '+dateText(next.date))):'')+
           (linking?'':ui.actionButton('Планы доходов','income-plans-manage')));
       }
       case 'income-review': {
@@ -613,7 +623,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'income-plans': {
         const archived=s.tab==='archive';
         const plans=(d.planning?.incomes||[]).filter(p=>p.archived===archived&&!p.deletedAt);
-        const rows=archived?[]:income.incomeOccurrences(d,s.month+'-01',budget.monthEnd(s.month));
+        const rows=archived?[]:incomeForMonth(s.month);
         const entries=plans.map(p=>`<button type="button" class="fr-income-plan-row" data-section-action="income-source" data-id="${esc(p.id)}">
           <span><strong>${esc(p.name)}</strong>${ui.small(incomeSchedule(p))}</span>
           <span>${ui.small('По плану')}${ui.moneyLabel(p.amount)}</span></button>`).join('');
@@ -628,7 +638,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'income-source': {
         const p=d.planning.incomes.find(p=>p.id===s.id);
-        return list(p.name,ui.panel(ui.pair('План',p.amount)+ui.small(RECURRENCES[p.repeat]||p.repeat))+
+        return list(p.name,ui.panel(ui.pair('План',p.amount)+ui.small(incomeSchedule(p))+ui.small('План действует с '+dateText(p.start)))+
           (p.archived?ui.actionButton('Восстановить','income-restore'):ui.actionButton('Изменить','income-edit')+
             ui.actionButton('В архив','income-stop'))+(s.error?ui.empty(s.error):''));
       }
@@ -948,6 +958,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'normal-income': return startOperation('income',{onSaved:()=>{stack=[];exit();}});
       case 'planned-income': return enter('income-due',{month:todayMonth()});
       case 'income-plans-manage': return enter('income-plans',{month:todayMonth()});
+      case 'income-show-month': s.month=id;s.scroll=0;return redraw();
       case 'income-due-pick': return receipt(incomeRow(id),true);
       case 'income-review-save': return s.save();
       case 'income-link-source': return enter(name);
