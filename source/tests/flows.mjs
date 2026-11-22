@@ -82,6 +82,8 @@ try{
       const x=knob.x+knob.width/2,y=knob.y+knob.height/2;
       await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x,y+106,{steps:10});await page.mouse.up();
     }else await page.locator('[data-entry=income]').tap();
+    await title('Записать доход');
+    await button('Другой доход').click();
     await title('Доход');
     await page.keyboard.type('500');
     await button('Далее').click();

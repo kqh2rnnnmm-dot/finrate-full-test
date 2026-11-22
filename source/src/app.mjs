@@ -380,7 +380,7 @@ function render(){
   host.innerHTML=`<section class="fr-screen" data-screen="${route}" ${route==='section'?'data-section-page':''}>${markup}</section>`;
   if(route==='section')sections.restore();
   if(route==='home')bindTrack(host.querySelector('.fr-track'),kind=>{
-    if(kind==='income'&&sections.hasDueIncome())return openSection('income-due');
+    if(kind==='income')return openSection('income-choice');
     start(kind);
   });
   if(route==='menu')host.querySelector('#fr-menu-panel').scrollTop=menuScroll;
@@ -466,20 +466,11 @@ menuButton.onclick=()=>move(route==='menu'?'home':'menu');
 root.addEventListener('pointerdown',event=>{
   if(route==='menu'&&!event.target.closest('.fr-menu-list,.fr-persistent-menu,.fr-back'))move('home');
 });
-let touchStart=null,categoryTouch=null;
+let touchStart=null;
 host.addEventListener('touchstart',event=>{
   touchStart=route==='menu'&&event.touches.length===1?event.touches[0]:null;
-  categoryTouch=route==='section'&&event.touches.length===1&&event.target.closest('.fr-category-tab-island')?event.touches[0]:null;
 },{passive:true});
 host.addEventListener('touchend',event=>{
-  const end=event.changedTouches[0];
-  if(categoryTouch&&end&&route==='section'){
-    const dx=end.clientX-categoryTouch.clientX,dy=end.clientY-categoryTouch.clientY;
-    if(Math.abs(dx)>28&&Math.abs(dx)>Math.abs(dy)*1.5){
-      event.preventDefault();sections.categorySwipe(dx<0?1:-1);
-    }
-  }
-  categoryTouch=null;
   if(touchStart&&route==='menu'){
     const end=event.changedTouches[0];
     if(end&&end.clientX-touchStart.clientX>60&&end.clientX-touchStart.clientX>Math.abs(end.clientY-touchStart.clientY)*1.5)move('home');
