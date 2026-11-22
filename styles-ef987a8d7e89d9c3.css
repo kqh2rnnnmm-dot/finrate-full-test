@@ -647,3 +647,5 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 @media(prefers-reduced-motion:reduce){
   #finrate .fr-category-carousel-highlight,#finrate .fr-category-carousel-rail,#finrate .fr-category-carousel-rail span{transition:none}
 }
+
+#finrate .fr-backup-download{display:flex;align-items:center;justify-content:center;text-decoration:none}

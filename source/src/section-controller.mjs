@@ -4,7 +4,7 @@ import * as ui from './sections.mjs';
 import {heading, esc, amountText, dateText, operationRows, accountMark, categoryLabel, keypad, enteredMoney, icon, unsaved} from './screens.mjs';
 import {addAccount, addCategory, archive, money, rename, uid, fail} from './engine/model.mjs';
 import {saveOperation, cancelOperation, localDate} from './engine/operations.mjs';
-import {reconcileAccount, resetAccountBalances, restoreAccount, categoryAction, setAccountPolicy, transferPreview} from './engine/block02.mjs';
+import {reconcileAccount, restoreAccount, categoryAction, setAccountPolicy, transferPreview} from './engine/block02.mjs';
 import {creditSummary, isCredit, setStatement} from './engine/credit.mjs';
 import * as budget from './engine/month-budget.mjs';
 import * as income from './engine/planning.mjs';
@@ -59,7 +59,10 @@ const errors = {
   STALE:'Данные изменились в другой вкладке. Откройте приложение заново.', EDIT_STALE:'Запись изменилась. Откройте её заново.',
   PAYMENT_AMOUNT:'Проверьте сумму и выберите частичную или полную оплату.',
   PAYMENT_DATE:'Проверьте дату оплаты.', PAYMENT_LINK:'Сумма или категория противоречит связанной оплате.',
-  CONFIRM:'Для подтверждения введите УДАЛИТЬ.',
+  CONFIRM:'Введите указанную фразу подтверждения.',
+  BACKUP_MISMATCH:'Копия не соответствует текущим данным. Сохраните новую копию.',
+  DECRYPT:'Не удалось открыть копию. Проверьте пароль.',
+  PASSWORD:'Пароль копии должен содержать от 12 до 1024 символов.',
   PLAN_LINK:'Этот доход уже распределён по ожиданиям или ожидание закрыто.'
 };
 
@@ -79,6 +82,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   }
   function pop() {
     const closed=stack.pop();
+    if(closed?.download)URL.revokeObjectURL(closed.download);
+    if(closed?.page==='reset-review')ledger.discardReset();
     if (closed?.returnTo) return closed.returnTo();
     if (stack.length) redraw();
     else exit();
@@ -119,13 +124,32 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     }
   }
   const confirm = (title,message,submitLabel,action,fn,done) => enter('confirm',{title,message,submitLabel,action,fn,done});
-  const resetWarning = (title,message,submitLabel,action,fn) => enter('confirm',{title,message,submitLabel,action,fn,danger:true});
   const monthLabel=month=>new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'})
     .format(new Date(month+'-01T00:00:00Z')).replace(/ г\.$/,'');
-  const resetBalances = id => resetWarning(id?'Обнулить остаток счёта?':'Обнулить остатки всех счетов?',
-    (id?'Остаток «'+accountName(id)+'» станет равен нулю.':'Остатки всех действующих счетов станут равны нулю.')+
-      ' История сохранится. В ней появится запись о сбросе. Реальные деньги и банковские долги не изменятся.',
-    'Обнулить остатки','account.reset',d=>resetAccountBalances(d,id,date()));
+  const backupPassword={key:'password',label:'Пароль копии',type:'password',maxlength:1024};
+  const backupFile={key:'backup',label:'Файл резервной копии',type:'file'};
+  const clearPhrase=mode=>mode==='all'?'СБРОСИТЬ FINRATE':'ОЧИСТИТЬ ФИНАНСЫ';
+  const clearTitle=mode=>mode==='all'?'Полный сброс FinRate':'Очистить финансовые данные';
+  const clearConsequences=mode=>mode==='all'?'Будут удалены счета, операции, планы, накопления, категории, настройки и внутренняя история. Внешний файл копии останется у вас.':
+    'Будут удалены счета, операции, планы, накопления и история. Категории и настройки сохранятся. Внешний файл копии останется у вас.';
+  function dataTask(fn,done){
+    return commit('data.management',null,done,fn);
+  }
+  function verifyReset(s){
+    form('Проверить резервную копию',[backupFile,backupPassword],{},v=>{
+      const {backup,password}=v;
+      v.password='';
+      let proof;
+      return dataTask(async()=>{proof=await ledger.prepareReset(s.intent,backup,password);},()=>{
+        const phrase=clearPhrase(s.mode);
+        form('Подтвердить сброс',[text('confirmation','Введите '+phrase)],{},v=>{
+          if(v.confirmation.trim()!==phrase)fail('CONFIRM');
+          return dataTask(()=>ledger.applyReset(proof,phrase),()=>location.reload());
+        },{submitLabel:'Удалить данные',danger:true,
+          insideBefore:ui.panel('<p>Копия проверена. '+clearConsequences(s.mode)+'</p>')});
+      });
+    },{submitLabel:'Проверить копию',insideBefore:ui.panel('<p>Выберите сохранённый файл и введите его пароль.</p>')});
+  }
   const editBase = op => ({editId:op.id,editBase:JSON.stringify(op)});
 
   function openShare(id) {
@@ -424,7 +448,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     switch (s.page) {
       case 'summary': return ui.summary(s.month,budget.monthlyOverview(d,s.month));
       case 'received': {
-        const rows=budget.monthOverviewOperations(d,s.month).filter(o=>o.kind==='income'&&!o.cancelled&&!o.pending);
+        const rows=d.operations.filter(o=>o.date.startsWith(s.month)&&o.kind==='income'&&!o.cancelled&&!o.pending);
         const period=monthLabel(s.month);
         return list('Получено',ui.amountOverview(rows.reduce((sum,op)=>sum+op.amount,0),{caption:period})+operationList(rows));
       }
@@ -436,25 +460,23 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           ui.link('Накопления','savings')+ui.link('Настройки сводки','budget-settings'));
       }
       case 'data-management':
-        return list('Управление данными',
-          ui.actionButton('Обнулить выбранный счёт','reset-account-picker')+
-          (d.accounts.some(a=>!a.archived)?ui.actionButton('Обнулить остатки всех счетов','reset-accounts'):'')+
-          ui.actionButton('Очистить итоги месяца','reset-month-picker')+
-          ui.actionButton('Удалить все данные','reset-all'));
-      case 'reset-account-picker': {
-        const balances=ledger.fact().balances;
-        return list('Выбрать счёт',d.accounts.filter(a=>!a.archived)
-          .map(a=>ui.link(a.name,'reset-account',a.id,ui.moneyLabel(balances[a.id]))).join('')||
-          ui.empty('Нет действующих счетов.'));
-      }
-      case 'reset-month-picker':
-        return list('Очистить итоги месяца',ui.monthControl(s.month)+ui.link('Очистить итоги','reset-month')+
-          (budget.monthReset(d,s.month)?ui.link('Операции до сброса','reset-month-history'):''));
-      case 'reset-month-history': {
-        const reset=budget.monthReset(d,s.month);
-        const ids=new Set(reset.operations);
-        return list('Операции до сброса',ui.small(monthLabel(s.month))+
-          operationList(d.operations.filter(op=>ids.has(op.id))));
+        return list('Управление данными',ui.actionButton('Сохранить резервную копию','backup-export')+
+          ui.actionButton('Восстановить из копии','backup-restore')+
+          ui.actionButton('Очистить финансовые данные','reset-financial')+
+          ui.actionButton('Полный сброс FinRate','reset-all')+(s.error?ui.empty(s.error):''));
+      case 'backup-ready':
+        return list('Резервная копия',ui.panel('<p>Сохраните файл и запомните пароль копии. Он понадобится для восстановления.</p>')+
+          `<a class="fr-section-secondary fr-backup-download" href="${esc(s.download)}" download="FinRate-${date()}.json">Скачать резервную копию</a>`);
+      case 'reset-review':
+        return list(clearTitle(s.mode),ui.panel('<p>'+clearConsequences(s.mode)+'</p>'+
+          ui.small('Счетов: '+s.intent.summary.accounts+' · операций: '+s.intent.summary.operations))+
+          ui.actionButton('Подготовить копию','backup-export')+ui.actionButton('Проверить сохранённую копию','reset-verify'));
+      case 'summary-range': {
+        const to=budget.monthEnd(s.month);
+        const report=ledger.fact({from:s.from,to});
+        return list('Сводка с даты',ui.small(dateText(s.from)+' — '+dateText(to))+
+          ui.panel(ui.pair('Доходы',report.income)+ui.pair('Расходы',report.expense)+ui.pair('Доходы минус расходы',report.result))+
+          ui.actionButton('Изменить дату','summary-range-filter')+ui.actionButton('Весь месяц','summary-range-close'));
       }
       case 'budget-settings': {
         const {excludeSavings}=budget.budgetPreferences(d);
@@ -462,8 +484,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           `<section class="fr-display-setting"><h2>Расчёт доступной суммы</h2>
             <button type="button" class="fr-display-toggle" role="switch" aria-checked="${!excludeSavings}"
               data-section-action="toggle-savings">Показывать накопления в результате месяца
-              <span aria-hidden="true"></span></button></section>`+ui.link('Очистить итоги месяца','reset-month')+
-          (budget.monthReset(d,s.month)?ui.link('Операции до сброса','reset-month-history'):'')+(s.error?ui.empty(s.error):''));
+              <span aria-hidden="true"></span></button></section>`+ui.link('Сводка с даты','summary-range-filter')+(s.error?ui.empty(s.error):''));
       }
       case 'form-accounts': {
         const selected=currentAccount(s.accountId);
@@ -565,7 +586,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           (a.archived?ui.small('В архиве'):a.id===budget.primaryAccount(d)?.id?ui.small('Основной счёт'):''))+
           (a.archived?ui.actionButton('Восстановить счёт','account-restore'):
             ui.actionButton('Перевод','account-transfer')+ui.link('Сверить остаток','account-reconcile')+
-            ui.link('Переименовать','account-rename')+ui.link('Обнулить остаток','reset-account',a.id)+ui.link('Архивировать','account-archive'))+
+            ui.link('Переименовать','account-rename')+ui.link('Архивировать','account-archive'))+
           ui.link('История счёта','account-history',a.id)+(s.actions&&canSetPrimary?`<div class="fr-credit-menu">${ui.actionButton('Сделать основным','account-primary')}</div>`:''),more);
       }
       case 'account-history': return list('История счёта',ui.small(accountName(s.id))+
@@ -613,7 +634,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'adjustment': {
         const o=d.operations.find(o=>o.id===s.id);
-        return list(o.note==='Сброс остатка счёта'?o.note:'Корректировка',ui.panel(ui.pair('Сумма',o.amount)+ui.small(accountName(o.accountId))+ui.small(dateText(o.date))));
+        return list('Корректировка',ui.panel(ui.pair('Сумма',o.amount)+ui.small(accountName(o.accountId))+ui.small(dateText(o.date))));
       }
       case 'income-choice':
         return list('Записать доход','<div class="fr-income-choice">'+
@@ -721,9 +742,6 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'form': return ui.formScreen({...s,busy,fields:visibleFields(s)});
       case 'discard': return unsaved('data-section-action','resume','discard');
       case 'confirm':
-        if(s.danger)return heading(s.title)+`<div class="fr-unsaved-content"><p class="fr-unsaved-message">${esc(s.message)}</p>
-          <div class="fr-unsaved-actions"><button type="button" class="fr-primary fr-cancel-confirm" data-section-action="confirm" ${busy?'disabled':''}>${esc(s.submitLabel)}</button>
-          <button type="button" class="fr-unsaved-discard" data-action="back">Отмена</button></div>${s.error?ui.empty(s.error):''}</div>`;
         return list(s.title,ui.panel(`<p>${esc(s.message)}</p>`)+ui.actionButton(s.submitLabel,'confirm')+
         (s.error?ui.empty(s.error):''));
     }
@@ -754,7 +772,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const menu=s.actions? `<div class="fr-credit-menu">${a.archived?ui.actionButton('Восстановить счёт','account-restore'):
       ui.actionButton('Записать покупку','credit-purchase')+ui.actionButton('Условия кредитной карты','credit-settings')+
       ui.actionButton('Переименовать','account-rename')+(credit.own?ui.actionButton('Перевести собственные средства','account-transfer'):'')+
-      ui.actionButton('Архивировать','account-archive')+ui.link('Обнулить остаток','reset-account',a.id)}${ui.link('История счёта','account-history',a.id)}</div>`:'';
+      ui.actionButton('Архивировать','account-archive')}${ui.link('История счёта','account-history',a.id)}</div>`:'';
     const byDate=new Map();
     for(const lot of credit.lots)if(lot.due)byDate.set(lot.due,(byDate.get(lot.due)||0)+lot.amount);
     const due=[...byDate].sort(([a],[b])=>a.localeCompare(b)).map(([day,amount])=>
@@ -879,21 +897,34 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'resume': return pop();
       case 'discard': stack.pop();return pop();
       case 'confirm': return commit(s.action,s.fn,s.done||pop);
-      case 'reset-account-picker': return enter(name);
-      case 'reset-accounts': return resetBalances();
-      case 'reset-account': return resetBalances(id||s.id);
-      case 'reset-month-picker': return enter(name,{month:todayMonth()});
-      case 'reset-month-history': return enter(name,{month:s.month});
-      case 'reset-month': return resetWarning('Очистить итоги месяца?',
-        'Итоги за '+monthLabel(s.month)+' начнутся с нуля. Операции останутся в истории. Остатки на счетах и планы сохранятся.',
-        'Очистить итоги','month.reset',d=>budget.resetMonthOverview(d,s.month,date()));
-      case 'reset-all': return form('Удалить все данные?',[text('confirmation','Введите УДАЛИТЬ')],{},
-        v=>{
-          const confirmation=v.confirmation.trim().toUpperCase();
-          if(confirmation!=='УДАЛИТЬ')fail('CONFIRM');
-          return commit('data.reset',null,()=>{location.reload();},()=>ledger.resetLocalData(confirmation));
-        },{submitLabel:'Удалить все данные',danger:true,insideBefore:ui.panel(
-          '<p>Счета, операции, история, настройки и локальные резервные копии будут удалены с этого устройства. Это действие нельзя отменить.</p>')});
+      case 'summary-range-filter': {
+        const first=s.month+'-01', last=budget.monthEnd(s.month);
+        return form('Сводка с даты',[{...day('from','Начало периода'),min:first,max:last}],{from:s.from||first},v=>{
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(v.from)||v.from<first||v.from>last)fail('SELECTION');
+          stack.pop();
+          if(s.page==='summary-range'){s.from=v.from;return redraw();}
+          return enter('summary-range',{month:s.month,from:v.from,settings:s});
+        },{submitLabel:'Показать'});
+      }
+      case 'summary-range-close':
+        if(stack.at(-2)?.page==='budget-settings'&&stack.at(-3)?.page==='summary')stack.pop();
+        return pop();
+      case 'backup-export': return form('Сохранить резервную копию',[backupPassword],{},v=>{
+        const password=v.password;v.password='';
+        let file;
+        return dataTask(async()=>{file=await ledger.exportBackup(password);},
+          ()=>{stack.pop();enter('backup-ready',{download:URL.createObjectURL(file)});});
+      },{submitLabel:'Подготовить копию',insideBefore:ui.panel('<p>Задайте пароль копии, минимум 12 символов.</p>')});
+      case 'backup-restore': return form('Восстановить из копии',[backupFile,backupPassword],{},v=>{
+        const {backup,password}=v;v.password='';
+        return dataTask(()=>ledger.restoreBackup(backup,password),()=>location.reload());
+      },{submitLabel:'Заменить данные',danger:true,insideBefore:ui.panel('<p>Данные из копии заменят текущие данные приложения.</p>')});
+      case 'reset-financial': case 'reset-all': {
+        const mode=name==='reset-all'?'all':'financial';
+        let intent;
+        return dataTask(async()=>{intent=await ledger.resetPreview(mode);},()=>enter('reset-review',{mode,intent}));
+      }
+      case 'reset-verify': return verifyReset(s);
       case 'received': return enter('received',{month:s.month});
       case 'budget-settings': return enter('budget-settings',{month:s.month||todayMonth()});
       case 'money': return enter('money');
@@ -1263,7 +1294,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       const signed=input.name==='opening'&&s.values.kind==='credit';
       input.value=input.value.replace(signed?/[^\d,.-]/g:/[^\d,.]/g,'');
     }
-    s.values[input.name]=input.type==='checkbox'?input.checked:input.value;
+    s.values[input.name]=input.type==='checkbox'?input.checked:input.type==='file'?input.files[0]:input.value;
     if ((s.dynamic==='account'&&['kind','mode'].includes(input.name))||(s.dynamic==='income'&&input.name==='repeat')){
       remember();redraw();host.querySelector(`[name="${input.name}"]`)?.focus({preventScroll:true});
     }

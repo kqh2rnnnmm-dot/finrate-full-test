@@ -137,9 +137,9 @@ export function post(d,input){
   validateOperation(d,op);balances({...d,operations:[...d.operations,op]});d.operations.push(op);return true;
 }
 export function balances(d){const result=Object.fromEntries(d.accounts.map(a=>[a.id,a.opening]));for(const o of d.operations)for(const [id,n] of postings(o)){if(!Object.hasOwn(result,id))fail('ACCOUNT');result[id]=addSafe(result[id],n);}Object.values(result).reduce(addSafe,0);return result;}
-export function totals(d,{from='0000-01-01',to='9999-12-31',exclude}={}){
+export function totals(d,{from='0000-01-01',to='9999-12-31'}={}){
   const b=balances(d);let income=0,expense=0,adjustment=0;const byCategory=Object.create(null);
-  for(const o of d.operations){if(o.date<from||o.date>to||exclude?.has(o.id))continue;
+  for(const o of d.operations){if(o.date<from||o.date>to)continue;
     if(o.cancelled||o.pending)continue;
     if(o.kind==='income')income=addSafe(income,o.amount);
     if(o.kind==='expense'||o.kind==='transfer'&&o.transferTarget==='external')expense=addSafe(expense,o.amount);

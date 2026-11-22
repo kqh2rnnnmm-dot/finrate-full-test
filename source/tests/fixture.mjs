@@ -96,6 +96,7 @@ try{
   document.body.textContent=JSON.stringify({
     datasetId:d.datasetId,revision:d.revision,accounts:d.accounts,categories:d.categories,operations:d.operations,events:d.events,
     balances:ledger.fact().balances,rates:d.monthBudget?.rates||[],
+    budgetSettings:d.monthBudget?{step:d.monthBudget.step,excludeSavings:d.monthBudget.excludeSavings}:null,
     goals:d.monthBudget?.goals||[],plans:d.planning?.incomes||[],payments:d.payments?.plans||[],total:ledger.fact().total
   });
   document.body.dataset.ready='yes';

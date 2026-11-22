@@ -158,7 +158,7 @@ export function operationRows(doc,rows,query=''){
   let day;
   return rows.slice().reverse().sort((a,b)=>b.date.localeCompare(a.date)).map(o=>{
     const category=categoryLabel(doc,o.allocations[0]?.categoryId);
-    const type=o.kind==='adjustment'&&o.note==='Сброс остатка счёта'?o.note:operationTypes[o.kind]||'Операция';
+    const type=operationTypes[o.kind]||'Операция';
     const account=doc.accounts.find(a=>a.id===o.accountId)?.name||'';
     const destination=doc.accounts.find(a=>a.id===o.toAccountId)?.name;
     const categoryName=o.allocations[0]?.categoryId ? [category.parent,category.name].filter(Boolean).join(' · ') : '';

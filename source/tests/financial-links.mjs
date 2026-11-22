@@ -3,7 +3,6 @@ import {test} from 'node:test';
 import {newDocument,addAccount,addCategory,totals,validateDocument} from '../src/engine/model.mjs';
 import {saveOperation,cancelOperation,migrateDocument} from '../src/engine/operations.mjs';
 import {creditSummary} from '../src/engine/credit.mjs';
-import {resetAccountBalances} from '../src/engine/block02.mjs';
 import * as budget from '../src/engine/month-budget.mjs';
 import * as incomes from '../src/engine/planning.mjs';
 import * as payments from '../src/engine/scheduled-payments.mjs';
@@ -162,22 +161,4 @@ test('Closed savings preserve only recorded operation links and freeze the outco
   delete d.monthBudget.goals[0].closed.operationRefs;
   validateDocument(d);
   assert.deepEqual(budget.closedSavingsOperations(d,budget.savings(d)[0]),{rows:[],changed:false});
-});
-
-test('Resetting balances keeps operations and clears both signs of credit balances',()=>{
-  const d=setup();
-  addAccount(d,{id:'credit-own',name:'Карта со своими средствами',financeType:'credit',opening:2000,
-    credit:{limit:10000,grace:{mode:'months',months:1}}});
-  addAccount(d,{id:'credit-debt',name:'Карта с долгом',financeType:'credit',opening:-3000,
-    credit:{limit:10000,grace:{mode:'months',months:1},openingLots:[{amount:3000,due:'2026-12-01'}]}});
-  saveOperation(d,fact('expense-before','expense',10000,'food'));
-  const history=structuredClone(d.operations);
-  assert.equal(resetAccountBalances(d,'credit-debt','2026-11-22'),true);
-  assert.equal(creditSummary(d,'credit-debt','2026-11-22').debt,0);
-  assert.equal(creditSummary(d,'credit-own','2026-11-22').own,2000);
-  assert.equal(resetAccountBalances(d,undefined,'2026-11-22'),true);
-  assert.ok(Object.values(totals(d).balances).every(amount=>amount===0));
-  assert.deepEqual(d.operations.slice(0,history.length),history);
-  assert.equal(totals(d).expense,10000);
-  assert.equal(resetAccountBalances(d,undefined,'2026-11-22'),false);
 });

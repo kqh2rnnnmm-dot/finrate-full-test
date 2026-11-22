@@ -52,15 +52,6 @@ export function validateMonthBudget(d) {
   if (budget === undefined) return;
   if (!budget || typeof budget.excludeSavings !== 'boolean' || ![1,5,10].includes(budget.step) ||
       !Array.isArray(budget.rates) || !Array.isArray(budget.goals) || !Array.isArray(budget.assignments)) fail('MONTH_SCHEMA');
-  if(budget.monthResets!==undefined){
-    if(!budget.monthResets||typeof budget.monthResets!=='object'||Array.isArray(budget.monthResets))fail('MONTH_SCHEMA');
-    for(const [month,reset] of Object.entries(budget.monthResets)){
-      if(!monthPattern.test(month)||!reset||!validDate(reset.date))fail('MONTH_SCHEMA');
-      for(const ids of [reset.operations,reset.assignments]){
-        if(!Array.isArray(ids)||ids.length>20000||ids.some(id=>typeof id!=='string'||!id||id.length>150)||new Set(ids).size!==ids.length)fail('MONTH_SCHEMA');
-      }
-    }
-  }
   const categories = new Set(d.categories.filter(c => c.type === 'expense' && !c.parentId).map(c => c.id));
   let previous = '';
   for (const {month, shares} of budget.rates) {
@@ -219,33 +210,11 @@ export function closeSavings(d,id,date) {
   saveShares(d,date.slice(0,7),{[id]:0});
 }
 
-export const monthReset=(d,month)=>data(d).monthResets?.[month];
-
-export function resetMonthOverview(d,month,date) {
-  if(!monthPattern.test(month)||!validDate(date))fail('MONTH_SCHEMA');
-  const previous=monthReset(d,month);
-  const operations=new Set(previous?.operations);
-  const assignments=new Set(previous?.assignments);
-  for(const op of d.operations)if(op.date.startsWith(month)&&!op.pending)operations.add(op.id);
-  for(const entry of data(d).assignments)if(entry.date.startsWith(month))assignments.add(entry.id);
-  if(previous&&operations.size===previous.operations.length&&assignments.size===previous.assignments.length)return false;
-  (write(d).monthResets??={})[month]={date,operations:[...operations],assignments:[...assignments]};
-}
-
-export function monthOverviewOperations(d,month) {
-  const excluded=new Set(monthReset(d,month)?.operations);
-  return d.operations.filter(op=>op.date.startsWith(month)&&!excluded.has(op.id));
-}
-
 export function monthlyOverview(d,month) {
   const from = month+'-01', to = monthEnd(month);
-  const current={...d,operations:monthOverviewOperations(d,month)};
-  const reset=monthReset(d,month);
-  const fact=totals(d,{from,to,exclude:new Set(reset?.operations)});
+  const fact=totals(d,{from,to});
   const expected = sum(incomeOccurrences(d,from,to).map(r=>r.amount));
-  const receipts=plannedReceipts(current);
-  const oldAssignments=new Set(reset?.assignments);
-  const funding={...current,monthBudget:{...data(d),assignments:data(d).assignments.filter(entry=>!oldAssignments.has(entry.id))}};
+  const receipts=plannedReceipts(d).filter(receipt=>receipt.date>=from&&receipt.date<=to);
   const planned=sum(receipts.map(receipt=>receipt.amount));
   const goalInfo=savings(d).filter(g=>!g.closed);
   const savingsIds=new Set(data(d).goals.map(g=>g.categoryId));
@@ -261,7 +230,7 @@ export function monthlyOverview(d,month) {
     return {...c,bps,plan,funded,spent:Math.max(0,spent.get(c.id)||0),savings:savingsIds.has(c.id)};
   }).sort((a,b)=>Number(b.bps>0)-Number(a.bps>0)||a.name.localeCompare(b.name,'ru'));
   const reservedForMonth=sum(goalInfo.map(goal=>{
-    const assigned=sum(goalFunding(funding,goal,receipts).filter(a=>a.date>=from&&a.date<=to).map(a=>a.amount));
+    const assigned=sum(goalFunding(d,goal,receipts).filter(a=>a.date>=from&&a.date<=to).map(a=>a.amount));
     return Math.min(goal.remaining,Math.max(0,assigned-(spent.get(goal.categoryId)||0)));
   }));
   const excludeSavings=data(d).excludeSavings;
