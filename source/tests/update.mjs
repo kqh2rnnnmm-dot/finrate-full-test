@@ -62,14 +62,15 @@ async function coherent(page,info){
   assert.equal(await page.locator('script[src]').getAttribute('src'),'./app-'+info.id+'.js');
   assert.equal(await page.locator('link[rel=stylesheet]').getAttribute('href'),'./styles-'+info.id+'.css');
 }
-async function record(page,n,category,account){
-  await page.locator('[data-entry=income]').click();await button(page,'Другой доход').click();
+async function record(page,n,category,account,{legacy=false}={}){
+  await page.locator('[data-entry=income]').click();
+  if(!legacy)await button(page,'Другой доход').click();
   for(const digit of String(n))await button(page,digit).click();
   await button(page,'Далее').click();
   await button(page,category).click();
   await button(page,'Сегодня').click();
   await page.locator('[data-account]').filter({hasText:account}).click();
-  await page.locator('[data-action=account-next]').click();
+  if(!legacy)await page.locator('[data-action=account-next]').click();
   await button(page,'Сохранить').click();
 }
 try{
@@ -164,6 +165,7 @@ try{
   await context.setOffline(true);
   await page.reload();await button(page,'Сводка').waitFor();await coherent(page,B);await noOffer(page);
   await button(page,'Сводка').click();
+  await button(page,'Ещё').click();
   await page.locator('[data-section-action=received]').click();
   assert.match(await page.locator('[data-operation]').innerText(),/32/);
   await context.setOffline(false);
@@ -183,7 +185,7 @@ try{
   await fixture(published,url,'regression');
   await published.goto(url);
   await ready(published);
-  await record(published,41,'Аванс','Копилка');
+  await record(published,41,'Аванс','Копилка',{legacy:true});
   await button(published,'Сводка').waitFor();
   const existing=await fixture(published,url);
   await published.goto(url);
@@ -225,6 +227,7 @@ try{
   await goalsPage.getByText('Обновлено до '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
   await coherent(goalsPage,A);
   await goalButton('Сводка').click();
+  await goalButton('Ещё').click();
   await goalButton('Накопления').click();
   await goalButton('История накоплений').click();
   for(const [id,status,amount] of [['holiday','Накоплено и потрачено','50 000'],['notebook','Накоплено','10 000']]){
@@ -247,7 +250,7 @@ try{
     await button(page,'Сводка').waitFor();
     await ready(page);
     if(ownData){
-      await record(page,77,'Аванс','Копилка');
+      await record(page,77,'Аванс','Копилка',{legacy:true});
       await button(page,'Сводка').waitFor();
     }
     const before=await fixture(page,url);

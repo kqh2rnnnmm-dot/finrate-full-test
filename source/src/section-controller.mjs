@@ -96,8 +96,24 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     if (['distribution','share-detail'].includes(s.page)) return JSON.stringify(s.values)!==s.initial;
     return false;
   }
+  function restoreSummaryMore(s) {
+    const dialog = host.querySelector('.fr-summary-dialog');
+    if (!s.more || !dialog || dialog.open) return;
+    dialog.onclick = event => {
+      if (event.target === dialog) {
+        event.stopPropagation();
+        dialog.close();
+      }
+    };
+    dialog.addEventListener('close',()=>{
+      if (dialog.isConnected) s.more = false;
+    },{once:true});
+    dialog.showModal();
+  }
   function back() {
     if (busy) return;
+    const more=host.querySelector('.fr-summary-dialog[open]');
+    if (more) return more.close();
     if(state().actions){state().actions=false;remember();return redraw();}
     if (dirty(state())) enter('discard');
     else pop();
@@ -155,7 +171,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   function openShare(id) {
     const parent = state();
     const parentDraft = parent?.page==='distribution';
-    const month = (parentDraft||parent?.page==='summary')?parent.month:todayMonth();
+    const month = (parentDraft||['summary','summary-expenses'].includes(parent?.page))?parent.month:todayMonth();
     const source = parentDraft ? parent.values : Object.fromEntries(budget.expenseCategories(doc())
       .map(c=>[c.id,String(budget.rateAt(doc(),c.id,month)/100 || '')]));
     const values = {...source};
@@ -446,7 +462,14 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   function render() {
     const s = state(), d = doc();
     switch (s.page) {
-      case 'summary': return ui.summary(s.month,budget.monthlyOverview(d,s.month));
+      case 'summary': return ui.summary(s.month,budget.monthlyOverview(d,s.month),monthLabel(s.month));
+      case 'summary-expenses': {
+        const values=budget.monthlyOverview(d,s.month);
+        const rows=d.operations.filter(o=>o.date.startsWith(s.month)&&!o.cancelled&&!o.pending&&
+          (o.kind==='expense'||o.kind==='refund'||o.kind==='transfer'&&o.transferTarget==='external'));
+        const categories=values.categories.filter(c=>!c.savings).map(c=>ui.link(c.name,'share',c.id,ui.moneyLabel(c.spent))).join('');
+        return list('Расходы',ui.amountOverview(values.expense,{caption:monthLabel(s.month)})+categories+operationList(rows));
+      }
       case 'received': {
         const rows=d.operations.filter(o=>o.date.startsWith(s.month)&&o.kind==='income'&&!o.cancelled&&!o.pending);
         const period=monthLabel(s.month);
@@ -694,13 +717,18 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'income-occurrence': {
         const r=incomeRow(s.id);
-        const links=(d.planning?.links||[]).filter(l=>l.occurrenceId===r.id).map(l=>l.operationId);
+        const links=(d.planning?.links||[]).filter(l=>l.occurrenceId===r.id);
         return list(r.name,ui.panel(ui.pair('Ожидается',r.amount)+ui.pair('Получено в счёт плана',r.received)+ui.pair('Осталось получить',r.remaining)+
           ui.small(dateText(r.date))+(r.status==='skipped'?ui.small('Ожидание закрыто'):''))+
           (r.remaining?ui.actionButton('Записать поступление','income-receipt')+
             (linkableIncome().length?ui.actionButton('Связать записанный доход','income-link-list'):'')+
             ui.actionButton('Больше не ожидаю','income-close'):'')+
-          operationList(d.operations.filter(o=>links.includes(o.id))));
+          links.map(link=>{
+            const op=d.operations.find(o=>o.id===link.operationId);
+            if(!op||op.cancelled||op.pending)return '';
+            return ui.panel(operationList([op])+ui.pair('Зачтено в план',link.amount)+
+              `<button type="button" class="fr-section-secondary" data-section-action="income-unlink" data-id="${esc(link.id)}">Отвязать от плана</button>`);
+          }).join(''));
       }
       case 'income-link-list': {
         const rows=linkableIncome();
@@ -925,6 +953,14 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         return dataTask(async()=>{intent=await ledger.resetPreview(mode);},()=>enter('reset-review',{mode,intent}));
       }
       case 'reset-verify': return verifyReset(s);
+      case 'summary-more':
+        s.more=true;
+        return restoreSummaryMore(s);
+      case 'summary-more-close': return host.querySelector('.fr-summary-dialog[open]')?.close();
+      case 'summary-expenses': return enter(name,{month:s.month});
+      case 'summary-plans': return enter('income-plans',{month:s.month,tab:'active'});
+      case 'summary-payments': return enter('payments',{month:s.month,tab:'due',selected:[]});
+      case 'summary-accounts': return enter('accounts',{tab:'active'});
       case 'received': return enter('received',{month:s.month});
       case 'budget-settings': return enter('budget-settings',{month:s.month||todayMonth()});
       case 'money': return enter('money');
@@ -1058,6 +1094,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'income-receipt': return receipt(incomeRow(s.id));
       case 'income-link-list': return enter(name,{id:s.id,month:s.month,remaining:incomeRow(s.id).remaining});
       case 'income-link': return linkIncome(incomeRow(s.id),id);
+      case 'income-unlink': return confirm('Отвязать от плана?', 'Поступление, его дата и остаток счёта сохранятся. План будет пересчитан.',
+        'Отвязать','income.unlink',d=>income.unlinkIncome(d,s.id,id),pop);
       case 'income-close': return confirm('Больше не ожидаю', 'Оставшаяся сумма ожидания будет закрыта.', 'Закрыть ожидание',
         'income.close',d=>income.closeIncomeOccurrence(d,s.id),pop);
       case 'payment-new': return paymentForm();
@@ -1339,6 +1377,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     restore() {
       if (scroll()) scroll().scrollTop=state().scroll;
       if (['distribution','share-detail'].includes(state().page)) updateShare(state());
+      if (state().page==='summary') restoreSummaryMore(state());
       layoutCategoryIsland(host.querySelector('.fr-category-carousel'));
     }
   };

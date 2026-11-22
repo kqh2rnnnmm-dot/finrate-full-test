@@ -99,6 +99,7 @@ try{
 
     await button('Сводка').click();
     assert.match(await page.locator('.fr-month-result').innerText(),/37,5/);
+    await button('Ещё').click();
     await page.locator('[data-section-action=received]').click();
     assert.equal(await page.locator('[data-operation]').count(),1);
     assert.match(await page.locator('[data-operation]').innerText(),/Аванс/);
@@ -112,6 +113,7 @@ try{
     await title('Получено');
     assert.match(await page.locator('[data-operation]').innerText(),/50/);
     await back();
+    await button('Закрыть').click();
     await back();
 
     await button('Открыть меню').click();
@@ -134,10 +136,12 @@ try{
     await context.setOffline(true);
     await page.reload();
     await button('Сводка').click();
+    await button('Ещё').click();
     await page.locator('[data-section-action=received]').click();
     assert.equal(await page.locator('[data-operation]').count(),1);
     assert.deepEqual(errors,[]);
     await back();
+    await button('Закрыть').click();
     const resultFont=await page.locator('.fr-month-result strong').evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
     assert.ok(resultFont>=28,'Monthly result is the largest amount');
     const meter=page.locator('[data-test-meter] .fr-category-meter');

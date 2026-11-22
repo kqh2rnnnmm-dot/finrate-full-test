@@ -38,6 +38,16 @@ export function incomeOccurrences(d,from,to){
 export function occurrence(d,id){const p=planning(d),saved=p.occurrences.find(x=>x.id===id);if(saved)return saved;const r=p.incomes.find(r=>id.startsWith(r.id+':'));if(!r)fail('PLANNING');const date=r.recurringVersion===2?id.slice(r.id.length+1):id.endsWith(':once')?r.start:id.slice(r.id.length+1).split(':')[0]+'-01',row=incomeOccurrences(d,date,endMonth(date)).find(x=>x.id===id);if(!row)fail('PLANNING');const value={id:row.id,incomeId:row.incomeId,date:row.date,amount:row.amount,status:row.status,accountId:row.accountId,categoryId:row.categoryId};p.occurrences.push(value);return value;}
 export function editOccurrence(d,id,{date,amount,status}){const o=occurrence(d,id);if(date!==undefined)o.date=date;if(amount!==undefined)o.amount=amount;if(status!==undefined)o.status=status;validatePlanningShape(d);}
 export function linkIncome(d,id,operationId){const p=planning(d),row=occurrence(d,id),o=d.operations.find(x=>x.id===operationId);if(!actual(o)||row.status!=='open')fail('PLAN_LINK');const spent=p.links.filter(l=>l.operationId===o.id).reduce((n,l)=>addSafe(n,l.amount),0),received=p.links.filter(l=>l.occurrenceId===id&&actual(d.operations.find(x=>x.id===l.operationId))).reduce((n,l)=>addSafe(n,l.amount),0),amount=Math.min(o.amount-spent,Math.max(0,row.amount-received));if(amount<=0)fail('PLAN_LINK');p.links.push({id:uid(),operationId,occurrenceId:id,amount});validatePlanningShape(d);}
+export function unlinkIncome(d, occurrenceId, linkId) {
+  const p=d.planning;
+  const index=p?.links.findIndex(link=>link.id===linkId&&link.occurrenceId===occurrenceId) ?? -1;
+  if(index<0)return false;
+  const row=p.occurrences.find(item=>item.id===occurrenceId);
+  p.links.splice(index,1);
+  if(row.status==='closed')row.status='open';
+  validatePlanningShape(d);
+  return true;
+}
 function confirmIncomeUnsafe(d,id,input){const p=planning(d);if(input.id&&d.operations.some(o=>o.id===input.id)){if(p.links.some(l=>l.operationId===input.id&&l.occurrenceId===id))return false;fail('DUPLICATE');}occurrence(d,id);post(d,{...input,kind:'income'});linkIncome(d,id,d.operations.at(-1).id);return true;}
 export function reconcileIncomeLinks(d,before=null){const p=d.planning;if(!p)return;const current=new Map(d.operations.map(o=>[o.id,o])),prior=new Map((before?.operations||[]).map(o=>[o.id,o])),budgets=new Map();for(const l of p.links){const o=current.get(l.operationId);if(!o)continue;const old=prior.get(o.id);if(actual(old)&&(!actual(o)||o.amount<old.amount)){const row=p.occurrences.find(x=>x.id===l.occurrenceId);if(row?.status==='closed')row.status='open';}const budget=budgets.has(o.id)?budgets.get(o.id):o.amount;l.amount=Math.min(l.amount,budget);budgets.set(o.id,budget-l.amount);}p.links=p.links.filter(l=>l.amount>0);}
 

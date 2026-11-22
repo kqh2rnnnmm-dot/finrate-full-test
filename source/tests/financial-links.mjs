@@ -137,6 +137,24 @@ test('Linking an existing income does not duplicate it; edits and cancellation c
   assert.equal(d.planning.links.length,2);
 });
 
+test('Unlinking an earlier income reopens its plan while preserving the transaction and the balance',()=>{
+  const d=setup();
+  const id='pay:once';
+  incomes.saveIncome(d,{id:'pay',name:'Тестовый доход',amount:2500000,start:'2026-11-25',categoryId:'salary',accountId:'bank'});
+  incomes.confirmPlannedIncome(d,id,{...fact('early-income','income',2500000,'salary','2026-10-24'),today:'2026-11-23'});
+  const [link]=d.planning.links;
+  const balances=totals(d).balances;
+  const operation=structuredClone(d.operations[0]);
+  assert.equal(incomes.unlinkIncome(d,id,link.id),true);
+  assert.equal(incomes.unlinkIncome(d,id,link.id),false);
+  assert.equal(incomes.incomeOccurrences(d,'2026-11-01','2026-11-30')[0].remaining,2500000);
+  assert.equal(budget.monthlyOverview(d,'2026-11').income,0);
+  assert.equal(budget.monthlyOverview(d,'2026-10').additional,2500000);
+  assert.deepEqual(totals(d).balances,balances);
+  assert.deepEqual(d.operations[0],operation);
+  validateDocument(d);
+});
+
 test('Closed savings preserve only recorded operation links and freeze the outcome',()=>{
   const d=setup();
   budget.saveSavingsGoal(d,{id:'trip',name:'Тестовая поездка',target:1500000,due:'',bps:0,today:'2026-11-10'});
