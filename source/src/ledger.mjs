@@ -23,6 +23,7 @@ export async function boot() {
 }
 
 export const document = () => engine.document;
+export const resetLocalData = confirmation => engine.resetLocalData(confirmation);
 export const mutate = (action, fn) => engine.mutate(action,fn);
 export const fact = range => totals(document(),range);
 export const addOperationCategory = entry => engine.mutate('category.add',doc=>addCategory(doc,entry));

@@ -25,6 +25,25 @@ export function saveFact(d,input,{fee=0,editId=null,editBase=null,draftId=null,l
 }
 export function createVirtualAccount(d,{name,opening=0,note='',financeType='debit',credit}){return atomic(d,n=>{const id=addAccount(n,{name,opening,kind:'wallet',financeType,credit});if(typeof note!=='string'||note.length>500)fail('SCHEMA');n.accounts.at(-1).note=note;return id;});}
 export function setAccountPolicy(d,id,{financeType,credit}){return atomic(d,n=>{const a=n.accounts.find(a=>a.id===id);if(!a)fail('ACCOUNT');const value=balances(n)[id];if(financeType!==(a.financeType||'debit')&&(value!==0||n.operations.some(o=>o.accountId===id||o.toAccountId===id)))fail('CREDIT_CONVERT');if(financeType==='debit'&&value<0)fail('INSUFFICIENT_FUNDS');if(financeType==='credit'&&value<-(credit?.limit||0))fail('CREDIT_LIMIT');n.accountEdits.push({id:uid(),at:now(),accountId:id,before:copy(a)});a.financeType=financeType;if(financeType==='credit')a.credit=copy(credit);else delete a.credit;});}
+export function resetAccountBalances(d,accountId,date=localDate()){
+ const targets=d.accounts.filter(a=>!a.archived&&(!accountId||a.id===accountId));
+ if(accountId&&!targets.length)fail('ACCOUNT');
+ const current=balances(d),changed=targets.filter(a=>current[a.id]!==0);
+ if(!changed.length)return false;
+ return atomic(d,n=>{
+   const dates=new Map(changed.map(a=>[a.id,date]));
+   for(const op of n.operations){
+     if(op.cancelled||op.pending)continue;
+     for(const [id,postingDate] of [[op.accountId,op.debitDate||op.date],[op.toAccountId,op.creditDate||op.date]]){
+       if(dates.has(id)&&postingDate>dates.get(id))dates.set(id,postingDate);
+     }
+   }
+   for(const a of changed)post(n,{kind:'adjustment',date:dates.get(a.id),accountId:a.id,
+     amount:-current[a.id],note:'Сброс остатка счёта'});
+   assertSpending(d,n);assertKnownCreditDates(d,n);
+   return true;
+ });
+}
 export function restoreAccount(d,id){const a=d.accounts.find(x=>x.id===id);if(!a)fail('NOT_FOUND');a.archived=false;}
 export function setOpening(d,id,amount){return atomic(d,n=>{if(!Number.isSafeInteger(amount))fail('AMOUNT');const a=n.accounts.find(x=>x.id===id);if(!a)fail('NOT_FOUND');if(isCredit(a))fail('CREDIT_DUE');n.accountEdits.push({id:uid(),at:now(),accountId:id,before:copy(a)});a.opening=amount;if(d.schema>=4)assertSpending(d,n);});}
 export function reconcileAccount(d,id,amount,date=localDate(),requestId=uid()){const delta=amount-balances(d)[id];if(!delta)return false;return atomic(d,n=>{if(isCredit(n.accounts.find(x=>x.id===id))&&delta<0)fail('CREDIT_DUE');if(isCredit(n.accounts.find(x=>x.id===id))&&amount>0)fail('CREDIT_OVERPAY');const result=post(n,{id:requestId,kind:'adjustment',accountId:id,date,amount:delta});if(d.schema>=4){assertSpending(d,n);assertKnownCreditDates(d,n);}return result;});}

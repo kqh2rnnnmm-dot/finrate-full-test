@@ -30,10 +30,10 @@ export function field({key,label,type='text',options,placeholder='',required=tru
   return `<label class="fr-section-field ${type==='checkbox'?'fr-check-field':''}"><span>${esc(label)}</span>${control}</label>`;
 }
 
-export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside='',insideBefore=''}) {
+export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside='',insideBefore='',danger=false}) {
   return heading(title)+`<form class="fr-section-form" data-section-form><div class="np-body" data-section-scroll>${insideBefore}${
     fields.map(f=>field(f,values[f.key])).join('')
-  }${inside}<p class="fr-create-error" role="alert">${esc(error)}</p></div><button type="submit" class="fr-primary" ${busy?'disabled':''}>${esc(submitLabel)}</button></form>`;
+  }${inside}<p class="fr-create-error" role="alert">${esc(error)}</p></div><button type="submit" class="fr-primary ${danger?'fr-cancel-confirm':''}" ${busy?'disabled':''}>${esc(submitLabel)}</button></form>`;
 }
 
 export function monthControl(month) {

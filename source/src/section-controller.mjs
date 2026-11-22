@@ -4,7 +4,7 @@ import * as ui from './sections.mjs';
 import {heading, esc, amountText, dateText, operationRows, accountMark, categoryLabel, keypad, enteredMoney, icon, unsaved} from './screens.mjs';
 import {addAccount, addCategory, archive, money, rename, uid, fail} from './engine/model.mjs';
 import {saveOperation, cancelOperation, localDate} from './engine/operations.mjs';
-import {reconcileAccount, restoreAccount, categoryAction, setAccountPolicy, transferPreview} from './engine/block02.mjs';
+import {reconcileAccount, resetAccountBalances, restoreAccount, categoryAction, setAccountPolicy, transferPreview} from './engine/block02.mjs';
 import {creditSummary, isCredit, setStatement} from './engine/credit.mjs';
 import * as budget from './engine/month-budget.mjs';
 import * as income from './engine/planning.mjs';
@@ -59,6 +59,7 @@ const errors = {
   STALE:'Данные изменились в другой вкладке. Откройте приложение заново.', EDIT_STALE:'Запись изменилась. Откройте её заново.',
   PAYMENT_AMOUNT:'Проверьте сумму и выберите частичную или полную оплату.',
   PAYMENT_DATE:'Проверьте дату оплаты.', PAYMENT_LINK:'Сумма или категория противоречит связанной оплате.',
+  CONFIRM:'Для подтверждения введите УДАЛИТЬ.',
   PLAN_LINK:'Этот доход уже распределён по ожиданиям или ожидание закрыто.'
 };
 
@@ -100,7 +101,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const values = Object.fromEntries(fields.map(f=>[f.key, defaults[f.key] ?? (f.type==='checkbox'?false:'')]));
     enter('form',{title,fields,values,save,initial:JSON.stringify(values),...options});
   }
-  async function commit(action,fn,done=pop) {
+  async function commit(action,fn,done=pop,apply=ledger.mutate) {
     if (busy) return;
     remember();
     const current = state();
@@ -108,7 +109,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     current.error = '';
     redraw();
     try {
-      await ledger.mutate(action,fn);
+      await apply(action,fn);
       busy = false;
       done();
     } catch (error) {
@@ -118,6 +119,13 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     }
   }
   const confirm = (title,message,submitLabel,action,fn,done) => enter('confirm',{title,message,submitLabel,action,fn,done});
+  const resetWarning = (title,message,submitLabel,action,fn) => enter('confirm',{title,message,submitLabel,action,fn,danger:true});
+  const monthLabel=month=>new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'})
+    .format(new Date(month+'-01T00:00:00Z')).replace(/ г\.$/,'');
+  const resetBalances = id => resetWarning(id?'Обнулить остаток счёта?':'Обнулить остатки всех счетов?',
+    (id?'Остаток «'+accountName(id)+'» станет равен нулю.':'Остатки всех действующих счетов станут равны нулю.')+
+      ' История сохранится. В ней появится запись о сбросе. Реальные деньги и банковские долги не изменятся.',
+    'Обнулить остатки','account.reset',d=>resetAccountBalances(d,id,date()));
   const editBase = op => ({editId:op.id,editBase:JSON.stringify(op)});
 
   function openShare(id) {
@@ -416,10 +424,9 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     switch (s.page) {
       case 'summary': return ui.summary(s.month,budget.monthlyOverview(d,s.month));
       case 'received': {
-        const from=s.month+'-01',to=budget.monthEnd(s.month);
-        const rows=d.operations.filter(o=>o.kind==='income'&&!o.cancelled&&!o.pending&&o.date.startsWith(s.month));
-        const period=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(from+'T00:00Z'));
-        return list('Получено',ui.amountOverview(ledger.fact({from,to}).income,{caption:period})+operationList(rows));
+        const rows=budget.monthOverviewOperations(d,s.month).filter(o=>o.kind==='income'&&!o.cancelled&&!o.pending);
+        const period=monthLabel(s.month);
+        return list('Получено',ui.amountOverview(rows.reduce((sum,op)=>sum+op.amount,0),{caption:period})+operationList(rows));
       }
       case 'money': {
         const values=budget.availableMoney(d),{excludeSavings}=budget.budgetPreferences(d);
@@ -428,13 +435,35 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
             excludeSavings&&values.reserved?-values.reserved:values.reserved)+
           ui.link('Накопления','savings')+ui.link('Настройки сводки','budget-settings'));
       }
+      case 'data-management':
+        return list('Управление данными',
+          ui.actionButton('Обнулить выбранный счёт','reset-account-picker')+
+          (d.accounts.some(a=>!a.archived)?ui.actionButton('Обнулить остатки всех счетов','reset-accounts'):'')+
+          ui.actionButton('Очистить итоги месяца','reset-month-picker')+
+          ui.actionButton('Удалить все данные','reset-all'));
+      case 'reset-account-picker': {
+        const balances=ledger.fact().balances;
+        return list('Выбрать счёт',d.accounts.filter(a=>!a.archived)
+          .map(a=>ui.link(a.name,'reset-account',a.id,ui.moneyLabel(balances[a.id]))).join('')||
+          ui.empty('Нет действующих счетов.'));
+      }
+      case 'reset-month-picker':
+        return list('Очистить итоги месяца',ui.monthControl(s.month)+ui.link('Очистить итоги','reset-month')+
+          (budget.monthReset(d,s.month)?ui.link('Операции до сброса','reset-month-history'):''));
+      case 'reset-month-history': {
+        const reset=budget.monthReset(d,s.month);
+        const ids=new Set(reset.operations);
+        return list('Операции до сброса',ui.small(monthLabel(s.month))+
+          operationList(d.operations.filter(op=>ids.has(op.id))));
+      }
       case 'budget-settings': {
         const {excludeSavings}=budget.budgetPreferences(d);
         return list('Настройки сводки',
           `<section class="fr-display-setting"><h2>Расчёт доступной суммы</h2>
             <button type="button" class="fr-display-toggle" role="switch" aria-checked="${!excludeSavings}"
               data-section-action="toggle-savings">Показывать накопления в результате месяца
-              <span aria-hidden="true"></span></button></section>`+(s.error?ui.empty(s.error):''));
+              <span aria-hidden="true"></span></button></section>`+ui.link('Очистить итоги месяца','reset-month')+
+          (budget.monthReset(d,s.month)?ui.link('Операции до сброса','reset-month-history'):'')+(s.error?ui.empty(s.error):''));
       }
       case 'form-accounts': {
         const selected=currentAccount(s.accountId);
@@ -536,7 +565,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           (a.archived?ui.small('В архиве'):a.id===budget.primaryAccount(d)?.id?ui.small('Основной счёт'):''))+
           (a.archived?ui.actionButton('Восстановить счёт','account-restore'):
             ui.actionButton('Перевод','account-transfer')+ui.link('Сверить остаток','account-reconcile')+
-            ui.link('Переименовать','account-rename')+ui.link('Архивировать','account-archive'))+
+            ui.link('Переименовать','account-rename')+ui.link('Обнулить остаток','reset-account',a.id)+ui.link('Архивировать','account-archive'))+
           ui.link('История счёта','account-history',a.id)+(s.actions&&canSetPrimary?`<div class="fr-credit-menu">${ui.actionButton('Сделать основным','account-primary')}</div>`:''),more);
       }
       case 'account-history': return list('История счёта',ui.small(accountName(s.id))+
@@ -584,7 +613,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'adjustment': {
         const o=d.operations.find(o=>o.id===s.id);
-        return list('Корректировка',ui.panel(ui.pair('Сумма',o.amount)+ui.small(accountName(o.accountId))+ui.small(dateText(o.date))));
+        return list(o.note==='Сброс остатка счёта'?o.note:'Корректировка',ui.panel(ui.pair('Сумма',o.amount)+ui.small(accountName(o.accountId))+ui.small(dateText(o.date))));
       }
       case 'income-choice':
         return list('Записать доход','<div class="fr-income-choice">'+
@@ -691,7 +720,11 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'form': return ui.formScreen({...s,busy,fields:visibleFields(s)});
       case 'discard': return unsaved('data-section-action','resume','discard');
-      case 'confirm': return list(s.title,ui.panel(`<p>${esc(s.message)}</p>`)+ui.actionButton(s.submitLabel,'confirm')+
+      case 'confirm':
+        if(s.danger)return heading(s.title)+`<div class="fr-unsaved-content"><p class="fr-unsaved-message">${esc(s.message)}</p>
+          <div class="fr-unsaved-actions"><button type="button" class="fr-primary fr-cancel-confirm" data-section-action="confirm" ${busy?'disabled':''}>${esc(s.submitLabel)}</button>
+          <button type="button" class="fr-unsaved-discard" data-action="back">Отмена</button></div>${s.error?ui.empty(s.error):''}</div>`;
+        return list(s.title,ui.panel(`<p>${esc(s.message)}</p>`)+ui.actionButton(s.submitLabel,'confirm')+
         (s.error?ui.empty(s.error):''));
     }
   }
@@ -721,7 +754,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const menu=s.actions? `<div class="fr-credit-menu">${a.archived?ui.actionButton('Восстановить счёт','account-restore'):
       ui.actionButton('Записать покупку','credit-purchase')+ui.actionButton('Условия кредитной карты','credit-settings')+
       ui.actionButton('Переименовать','account-rename')+(credit.own?ui.actionButton('Перевести собственные средства','account-transfer'):'')+
-      ui.actionButton('Архивировать','account-archive')}${ui.link('История счёта','account-history',a.id)}</div>`:'';
+      ui.actionButton('Архивировать','account-archive')+ui.link('Обнулить остаток','reset-account',a.id)}${ui.link('История счёта','account-history',a.id)}</div>`:'';
     const byDate=new Map();
     for(const lot of credit.lots)if(lot.due)byDate.set(lot.due,(byDate.get(lot.due)||0)+lot.amount);
     const due=[...byDate].sort(([a],[b])=>a.localeCompare(b)).map(([day,amount])=>
@@ -846,6 +879,21 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'resume': return pop();
       case 'discard': stack.pop();return pop();
       case 'confirm': return commit(s.action,s.fn,s.done||pop);
+      case 'reset-account-picker': return enter(name);
+      case 'reset-accounts': return resetBalances();
+      case 'reset-account': return resetBalances(id||s.id);
+      case 'reset-month-picker': return enter(name,{month:todayMonth()});
+      case 'reset-month-history': return enter(name,{month:s.month});
+      case 'reset-month': return resetWarning('Очистить итоги месяца?',
+        'Итоги за '+monthLabel(s.month)+' начнутся с нуля. Операции останутся в истории. Остатки на счетах и планы сохранятся.',
+        'Очистить итоги','month.reset',d=>budget.resetMonthOverview(d,s.month,date()));
+      case 'reset-all': return form('Удалить все данные?',[text('confirmation','Введите УДАЛИТЬ')],{},
+        v=>{
+          const confirmation=v.confirmation.trim().toUpperCase();
+          if(confirmation!=='УДАЛИТЬ')fail('CONFIRM');
+          return commit('data.reset',null,()=>{location.reload();},()=>ledger.resetLocalData(confirmation));
+        },{submitLabel:'Удалить все данные',danger:true,insideBefore:ui.panel(
+          '<p>Счета, операции, история, настройки и локальные резервные копии будут удалены с этого устройства. Это действие нельзя отменить.</p>')});
       case 'received': return enter('received',{month:s.month});
       case 'budget-settings': return enter('budget-settings',{month:s.month||todayMonth()});
       case 'money': return enter('money');

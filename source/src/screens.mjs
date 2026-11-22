@@ -37,7 +37,7 @@ export const home=()=>`<div class="fr-home-header"><div class="fr-brand">FinRate
 const groups=[
   ['Учёт',[['Операции','operations'],['Перевод','transfer'],['Счета и кошельки','accounts'],['Категории','categories']]],
   ['Планы и отчёты',[['Платежи','payments'],['Планы доходов','income-plans'],['Накопления','savings']]],
-  ['Настройки и помощь',[['Настройки сводки','budget-settings']]]
+  ['Настройки и помощь',[['Настройки сводки','budget-settings'],['Управление данными','data-management']]]
 ];
 export function menu(open) {
   return heading('Меню')+`<nav id="fr-menu-panel" class="fr-menu-list" aria-label="Разделы FinRate">${groups.map(([title,items])=>`<details class="fr-menu-accordion" data-menu-group="${esc(title)}" ${open===title?'open':''}><summary>${esc(title)}<span class="fr-fold" aria-hidden="true">${icon('down')}</span></summary><div class="fr-menu-children">${items.map(([label,action])=>`<button type="button" class="fr-menu-item" data-action="${action}">${label}</button>`).join('')}</div></details>`).join('')}</nav>`;
@@ -158,7 +158,7 @@ export function operationRows(doc,rows,query=''){
   let day;
   return rows.slice().reverse().sort((a,b)=>b.date.localeCompare(a.date)).map(o=>{
     const category=categoryLabel(doc,o.allocations[0]?.categoryId);
-    const type=operationTypes[o.kind]||'Операция';
+    const type=o.kind==='adjustment'&&o.note==='Сброс остатка счёта'?o.note:operationTypes[o.kind]||'Операция';
     const account=doc.accounts.find(a=>a.id===o.accountId)?.name||'';
     const destination=doc.accounts.find(a=>a.id===o.toAccountId)?.name;
     const categoryName=o.allocations[0]?.categoryId ? [category.parent,category.name].filter(Boolean).join(' · ') : '';

@@ -29,11 +29,15 @@ export function createStore(name='finrate-local-v1',dependencies){
       }).catch(transactionFailure);
     },
     async safety(){return db.safety.orderBy('createdAt').reverse().toArray();},
-    async reset(expected,{validate}={}){
+    async reset(expected,{validate,replacement}={}){
       return db.transaction('rw',db.vault,db.safety,async()=>{
         const current=await db.vault.get('active');if(!current||!same(current,expected))fail('STALE');
         validate?.(current);await db.safety.clear();validate?.(current);await db.vault.clear();validate?.(current);
         if(validate&&(await db.vault.count()!==0||await db.safety.count()!==0))fail('STALE');validate?.(current);
+        if(replacement){
+          const record={id:'active',generation:current.generation+1,vault:replacement.vault};
+          await db.vault.put(record);await db.vault.put(replacement.access);return record;
+        }
       }).catch(transactionFailure);
     },
     async close(){db.close();}

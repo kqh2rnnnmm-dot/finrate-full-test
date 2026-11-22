@@ -1,7 +1,7 @@
 import {createEmergencyReset} from './emergency-reset.mjs';
 import {resetSummary,clearedDocument,sameContainer} from './reset-policy.mjs';
 import {defaultPlanning} from './planning.mjs';
-import {copy,changed,validateDocument,newDocument,addAccount,addCategory,totals,fail,SCHEMA} from './model.mjs';
+import {copy,changed,validateDocument,newDocument,addAccount,addCategory,totals,fail,SCHEMA,uid} from './model.mjs';
 import {createVault,openVault,openWithKey,authorizeVault,newPasswordSlot,seal,backupBlob,parseBackup} from './crypto.mjs';
 import {createAccess,openAccess,validAccess,rebindAccess} from './device-access.mjs';
 import {migrateDocument} from './operations.mjs';
@@ -37,7 +37,7 @@ export class FinRate {
     const record=await this.store.read();if(!record)fail('EMPTY');let a=await this.store.readAccess();if(!await validAccess(record.vault,a))fail('ACCESS_LOST');
     if(a.mode==='pin')a=await this.store.accessAttempt(record,a.accessId);
     const result=await openAccess(record.vault,a,pin);await this.store.resetAttempts(record,a.accessId);await this.store.assertCurrent(record);
-    this.document=migrateDocument(result.doc);this.key=result.key;this.record=record;this.needsMigration=result.doc.schema<SCHEMA;return copy(this.document);
+    this.document=migrateDocument(result.doc);this.key=result.key;this.record=record;this.entry={mode:a.mode,length:a.length,failed:0};this.needsMigration=result.doc.schema<SCHEMA;return copy(this.document);
   });}
   async changeSecurity({action,secret,mode='password',password,pin,entry}){return this.exclusive(async()=>{
     if(!this.document||!this.key||!['password','entry'].includes(action))fail('LOCKED');
@@ -107,6 +107,20 @@ export class FinRate {
       this.document=next;this.record=record;
     }
     this.discardReset();this.needsMigration=false;return request.mode;
+  });}
+  async resetLocalData(confirmation){return this.exclusive(async()=>{
+    if(!this.document||!this.key||!this.record||this.entry.mode!=='none')fail('LOCKED');
+    if(confirmation!=='УДАЛИТЬ')fail('CONFIRM');
+    const document=newDocument(this.document.currency);
+    const password=uid()+uid();
+    const {vault}=await createVault(document,password);
+    const auth=await authorizeVault(vault,password);
+    try{
+      const access=await createAccess(vault,auth.raw,'none');
+      const record=await this.store.reset(this.record,{replacement:{vault,access}});
+      this.document=document;this.key=auth.key;this.record=record;this.entry={mode:'none',length:null,failed:0};
+      this.discardReset();this.discardEmergencyReset();this.needsMigration=false;
+    }finally{auth.raw.fill(0);}
   });}
   async prepareRestore(file,secret,mode='password'){return this.exclusive(async()=>{
     const vault=await parseBackup(file),{doc,key}=await openVault(vault,secret,mode),expected=await this.store.read();
