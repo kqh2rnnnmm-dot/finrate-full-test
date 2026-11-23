@@ -180,3 +180,22 @@ test('Closed savings preserve only recorded operation links and freeze the outco
   validateDocument(d);
   assert.deepEqual(budget.closedSavingsOperations(d,budget.savings(d)[0]),{rows:[],changed:false});
 });
+
+test('Cancelling a spent income records the true balance and reopens the linked expectation',()=>{
+  const d=setup();
+  const id='pay:once';
+  incomes.saveIncome(d,{id:'pay',name:'Тестовый доход',amount:1000000,
+    start:'2026-11-25',categoryId:'salary',accountId:'bank'});
+  incomes.confirmPlannedIncome(d,id,{...fact('spent-income','income',1000000,'salary','2026-11-23'),today:'2026-11-23'});
+  saveOperation(d,fact('later-expense','expense',2500000,'food','2026-11-24'));
+  assert.equal(totals(d).balances.bank,500000);
+  assert.equal(cancelOperation(d,'spent-income'),true);
+  assert.equal(cancelOperation(d,'spent-income'),false);
+  assert.equal(totals(d).balances.bank,-500000);
+  assert.equal(totals(d).income,0);
+  assert.equal(totals(d).expense,2500000);
+  assert.equal(incomes.incomeOccurrences(d,'2026-11-01','2026-11-30')[0].remaining,1000000);
+  assert.throws(()=>saveOperation(d,fact('new-expense','expense',1,'food','2026-11-25')),{code:'INSUFFICIENT_FUNDS'});
+  assert.equal(d.operations.length,2);
+  validateDocument(d);
+});

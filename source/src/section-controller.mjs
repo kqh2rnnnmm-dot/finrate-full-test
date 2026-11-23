@@ -168,16 +168,27 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   }
   const editBase = op => ({editId:op.id,editBase:JSON.stringify(op)});
 
+  const monthShares = month => Object.fromEntries(budget.expenseCategories(doc())
+    .map(c=>[c.id,String(budget.rateAt(doc(),c.id,month)/100 || '')]));
+
   function openShare(id) {
     const parent = state();
     const parentDraft = parent?.page==='distribution';
-    const month = (parentDraft||['summary','summary-expenses'].includes(parent?.page))?parent.month:todayMonth();
-    const source = parentDraft ? parent.values : Object.fromEntries(budget.expenseCategories(doc())
-      .map(c=>[c.id,String(budget.rateAt(doc(),c.id,month)/100 || '')]));
-    const values = {...source};
+    const fromSummary = ['summary','summary-expenses'].includes(parent?.page);
+    const month = parentDraft||fromSummary ? parent.month : todayMonth();
+    const values = parentDraft ? {...parent.values} : monthShares(month);
     enter(id?'share-detail':'distribution',{
-      single:id,title:id?currentCategory(id).name:'Распределение плана',values,initial:JSON.stringify(values),month,parentDraft
+      single:id,title:id?currentCategory(id).name:'Распределение плана',values,initial:JSON.stringify(values),month,parentDraft,
+      categoryHistory:!!id&&fromSummary
     });
+  }
+  function changeShareMonth(s,month) {
+    s.values=monthShares(month);
+    s.initial=JSON.stringify(s.values);
+    s.month=month;
+    s.scroll=0;
+    s.error='';
+    redraw();
   }
   function shares(s) {
     return Object.fromEntries(Object.entries(s.values).map(([id,value])=>[id,percent(String(value))]));
@@ -527,7 +538,9 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'share-detail': {
         const overview=budget.monthlyOverview(d,s.month);
         s.plan=overview.expected;
-        return ui.shareScreen(s,overview.categories.filter(c=>!s.single||c.id===s.single),s.plan,budget.budgetPreferences(d).step);
+        const operations=s.categoryHistory ? operationList(d.operations.filter(o=>o.date.startsWith(s.month)&&
+          o.allocations.some(a=>budget.categoryRoot(d,a.categoryId)===s.single))) : '';
+        return ui.shareScreen(s,overview.categories.filter(c=>!s.single||c.id===s.single),s.plan,budget.budgetPreferences(d).step,operations);
       }
       case 'categories': {
         return heading('Категории','',ui.plus('category-type-new','Создать категорию'))+
@@ -596,7 +609,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           return accounts.length?`<section class="fr-account-section"><h2 class="fr-section-title">${name}</h2>${
             accounts.map(a=>ui.accountCard(a,balances[a.id],a.id===budget.primaryAccount(d)?.id)).join('')}</section>`:'';
         }).join('');
-        return heading('Счета и кошельки')+ui.tabs([['active','Действующие'],['archive','Архив']],active?'active':'archive')+
+        return heading('Счета и кошельки')+ui.tabs([['active','Действующие'],['archive','Архив']],active?'active':'archive').replace('fr-section-tabs','fr-section-tabs fr-account-tabs')+
           ui.body(rows||ui.empty(active?'Счетов пока нет.':'Архив пуст.'))+
           (active?'<button type="button" class="fr-primary" data-section-action="account-new" aria-label="Новый счёт">Добавить счёт</button>':'');
       }
@@ -919,11 +932,17 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         next.setUTCMonth(next.getUTCMonth()+Number(id));
         const month=next.toISOString().slice(0,7);
         if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||Number(month.slice(0,4))<100) return;
+        if(s.categoryHistory){
+          if(dirty(s))return enter('discard',{onDiscard:()=>changeShareMonth(s,month)});
+          return changeShareMonth(s,month);
+        }
         s.month=month;s.scroll=0;s.selected=[];return redraw();
       }
       case 'tab': remember();s.tab=id;s.scroll=0;s.selecting=false;s.selected=[];return redraw();
       case 'resume': return pop();
-      case 'discard': stack.pop();return pop();
+      case 'discard':
+        stack.pop();
+        return s.onDiscard ? s.onDiscard() : pop();
       case 'confirm': return commit(s.action,s.fn,s.done||pop);
       case 'summary-range-filter': {
         const first=s.month+'-01', last=budget.monthEnd(s.month);

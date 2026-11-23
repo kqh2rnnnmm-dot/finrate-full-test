@@ -77,23 +77,32 @@ export function goalProgress(goal) {
     ${small('Накоплено '+amountText(goal.accumulated))}</div>`;
 }
 
-export function shareScreen(state,categories,plan,step) {
+export function shareScreen(state,categories,plan,step,operations) {
   const settings=state.single?'':`<button type="button" class="fr-category-new" data-section-action="slider-step" aria-label="Шаг ползунка">${icon('settings')}</button>`;
-  return heading(state.title,'',settings)+`<div class="np-island fr-share-totals">
+  const totals=`<div class="np-island fr-share-totals">
     <div class="np-row fr-share-free"><span>Свободно к<br>распределению</span><strong data-share-free></strong></div>
     <div class="fr-budget-bar fr-budget-bar--wide" aria-hidden="true"><span data-share-bar></span></div>
     <div class="np-row fr-share-caption"><span>Распределено</span><span data-share-total></span></div>
     <div class="np-row fr-share-basis"><span>Свободно по плану</span><strong class="np-money" data-share-free-amount></strong></div>
     ${state.single?'<p class="fr-share-room" data-share-room></p>':''}
     <p class="fr-create-error" data-share-error role="status"></p>
-  </div>`+body(categories.map(c=>`<div class="fr-share-panel">
+  </div>`;
+  const panels=categories.map(c=>`<div class="fr-share-panel">
     ${state.single?'':link(c.name,'share-detail',c.id)}
     <div class="fr-share-values"><div><small>План категории</small><strong class="np-money" data-share-amount></strong></div>
       <label class="fr-share-field"><input type="text" inputmode="decimal" data-share-input data-id="${esc(c.id)}" aria-label="Процент ${esc(c.name)}" placeholder="0" value="${esc(state.values[c.id])}"><span>%</span></label>
     </div>
     <input type="range" min="0" max="100" step="${step}" value="${Number(state.values[c.id])||0}" data-share-slider data-id="${esc(c.id)}" aria-label="Ползунок ${esc(c.name)}">
-  </div>`).join('')||empty('Категорий пока нет.'))+`<p class="fr-create-error fr-section-error" role="alert">${esc(state.error)}</p>`+
-    primary(state.single && state.parentDraft?'Готово':'Сохранить','section-save-share');
+  </div>`).join('')||empty('Категорий пока нет.');
+  const error=`<p class="fr-create-error fr-section-error" role="alert">${esc(state.error)}</p>`;
+  const save=primary(state.single && state.parentDraft?'Готово':'Сохранить','section-save-share');
+  const top=heading(state.title,'',settings);
+  if(state.categoryHistory){
+    return top+monthControl(state.month)+
+      `<div class="np-body fr-share-history" data-section-scroll>${totals}${panels}${error}
+        <h2 class="fr-section-title">Операции за месяц</h2>${operations}</div><div class="fr-share-save">${save}</div>`;
+  }
+  return top+totals+body(panels)+error+save;
 }
 
 export function goalCard(goal) {

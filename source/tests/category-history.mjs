@@ -1,0 +1,133 @@
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import {chromium} from 'playwright';
+import binary from '@sparticuz/chromium';
+import {scope,serveFixture,fixture} from './fixture-server.mjs';
+
+const mime={html:'text/html; charset=utf-8',js:'application/javascript',css:'text/css',webmanifest:'application/manifest+json',png:'image/png'};
+const server=createServer(async(req,res)=>{
+  const path=new URL(req.url,'http://localhost').pathname;
+  if(serveFixture(path,res))return;
+  const name=path.slice(scope.length)||'index.html';
+  try {
+    if(!path.startsWith(scope)||!/^[a-z0-9-]+\.(html|js|css|webmanifest|png)$/.test(name))return res.writeHead(404).end();
+    const bytes=await readFile('site/'+name);
+    res.writeHead(200,{'Content-Type':mime[name.split('.').at(-1)]}).end(bytes);
+  }catch{res.writeHead(404).end();}
+});
+await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+const url='http://127.0.0.1:'+server.address().port+scope;
+let browser;
+try{
+  browser=await chromium.launch({executablePath:await binary.executablePath(),args:binary.args.filter(arg=>arg!=='--single-process')});
+  for(const [width,height,colorScheme] of [[320,568,'light'],[390,844,'dark']]){
+    const context=await browser.newContext({viewport:{width,height},hasTouch:true,isMobile:true,colorScheme,reducedMotion:'reduce'});
+    const page=await context.newPage();
+    const errors=[];
+    page.on('pageerror',error=>errors.push(error.message));
+    page.setDefaultTimeout(6000);
+    await page.clock.setFixedTime(new Date(2026,10,23,12));
+    await fixture(page,url,'categoryHistory');
+    await page.goto(url);
+    const button=name=>page.getByRole('button',{name,exact:true});
+    const section=(action,id)=>page.locator('[data-section-action="'+action+'"]'+(id?'[data-id="'+id+'"]':''));
+    const row=id=>page.locator('[data-operation="'+id+'"]');
+    const month=()=>page.locator('.fr-month-title').innerText();
+    const back=()=>button('Назад').click();
+    const history=page.locator('.fr-share-history');
+    const dialog=page.locator('.fr-summary-dialog');
+    await button('Сводка').click();
+    const sourceMonth=await month();
+
+    await section('share','food').click();
+    assert.equal(await month(),sourceMonth);
+    assert.equal(await history.locator('[data-operation]').count(),14);
+    assert.equal(await row('other-category-expense').count(),0);
+    const position=selector=>page.locator(selector).evaluate(el=>el.getBoundingClientRect().top);
+    const fixed=await Promise.all(['.fr-title','.fr-month-title','.fr-share-save'].map(position));
+    await row('child-food-1').scrollIntoViewIfNeeded();
+    await history.evaluate(el=>el.scrollTop=el.scrollHeight);
+    assert.deepEqual(await Promise.all(['.fr-title','.fr-month-title','.fr-share-save'].map(position)),fixed);
+    const scrolled=await history.evaluate(el=>el.scrollTop);
+    assert.ok(scrolled>0);
+    await row('child-food-1').click();
+    await button('История изменений').click();
+    await back();
+    await back();
+    assert.equal(await history.evaluate(el=>el.scrollTop),scrolled);
+    assert.equal(await month(),sourceMonth);
+    await row('child-food-1').click();
+    await button('Добавить заметку').click();
+    await page.getByRole('textbox',{name:'Текст заметки'}).fill('Проверка из конверта');
+    await button('Готово').click();
+    await button('Сохранить').click();
+    await history.waitFor();
+    assert.equal(await history.evaluate(el=>el.scrollTop),scrolled);
+    await page.getByRole('textbox',{name:'Процент Продукты'}).fill('3');
+    await button('Предыдущий месяц').click();
+    await button('Вернуться к редактированию').click();
+    assert.equal(await month(),sourceMonth);
+    assert.equal(await page.getByRole('textbox',{name:'Процент Продукты'}).inputValue(),'3');
+    await button('Предыдущий месяц').click();
+    await button('Выйти без сохранения').click();
+    assert.match(await month(),/октябрь/);
+    await row('past-food').waitFor();
+    assert.equal(await history.locator('[data-operation]').count(),1);
+    await back();
+    assert.equal(await month(),sourceMonth);
+
+    await button('Ещё').click();
+    const colors=await dialog.evaluate(el=>[getComputedStyle(el).backgroundColor,getComputedStyle(el.querySelector('[data-section-action=summary-more-close]')).backgroundColor]);
+    assert.notEqual(...colors);
+    await section('summary-expenses').click();
+    await section('share','food').click();
+    assert.equal(await month(),sourceMonth);
+    await button('Предыдущий месяц').click();
+    await row('past-food').waitFor();
+    await back();
+    await page.getByRole('heading',{name:'Расходы',exact:true}).waitFor();
+    await back();
+    await dialog.waitFor({state:'visible'});
+
+    await section('summary-accounts').click();
+    const tabs=page.locator('.fr-account-tabs');
+    const tabBackground=()=>tabs.evaluate(el=>getComputedStyle(el).backgroundColor);
+    const activeBackground=await tabBackground();
+    assert.notEqual(activeBackground,'rgba(0, 0, 0, 0)');
+    await button('Архив').click();
+    await page.getByText('Архив пуст.',{exact:true}).waitFor();
+    assert.equal(await tabBackground(),activeBackground);
+    await button('Действующие').click();
+    assert.equal(await tabBackground(),activeBackground);
+    await back();
+    await section('received').click();
+    await row('spent-plan-income').click();
+    await button('Отменить операцию').click();
+    assert.match(await page.locator('.fr-unsaved-message').innerText(),/остаток на счёте станет отрицательным/);
+    await button('Отменить операцию').click();
+    await page.getByRole('heading',{name:'Получено',exact:true}).waitFor();
+    assert.equal(await row('spent-plan-income').count(),0);
+    await back();
+    await button('Закрыть').click();
+    await button('Предыдущий месяц').click();
+    await button('Ещё').click();
+    await section('received').click();
+    await row('past-ordinary-income').click();
+    await button('Отменить операцию').click();
+    assert.match(await page.locator('.fr-unsaved-message').innerText(),/остаток на счёте станет отрицательным/);
+    await button('Отменить операцию').click();
+    await page.getByRole('heading',{name:'Получено',exact:true}).waitFor();
+    const after=await fixture(page,url);
+    assert.equal(after.balances.spare,-141000);
+    assert.ok(after.operations.filter(op=>op.kind==='income').every(op=>op.cancelled));
+    assert.equal(after.operations.filter(op=>op.kind==='expense'&&!op.cancelled).length,16);
+    assert.equal(after.operations.find(op=>op.id==='child-food-1').note,'Проверка из конверта');
+    assert.deepEqual(errors,[]);
+    await context.close();
+    console.log('PASS',width,colorScheme,'category history, navigation, empty archive, spent income cancellation');
+  }
+}finally{
+  await browser?.close();
+  await new Promise(resolve=>server.close(resolve));
+}

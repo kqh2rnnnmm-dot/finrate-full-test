@@ -239,7 +239,17 @@ async function cancel(){
   if(busy)return;
   busy=true;error='';render();
   try{await ledger.cancel(previous.id);return finish();}
-  catch{error='Не удалось отменить операцию. Попробуйте ещё раз.';busy=false;render();}
+  catch(cause){
+    error={
+      STALE:'Данные изменились в другой вкладке. Откройте приложение заново.',
+      REFUND_LINKED:'Сначала отмените возврат по этой операции.',
+      FEE_LINKED:'Отмените перевод, чтобы отменить его комиссию.',
+      INSUFFICIENT_FUNDS:'Отмена приведёт к недостатку средств на счёте.',
+      CREDIT_LIMIT:'Отмена привела бы к превышению кредитного лимита.'
+    }[cause.code]||'Не удалось отменить операцию. Попробуйте ещё раз.';
+    busy=false;
+    render();
+  }
 }
 async function createCategory(){
   if(busy||!categoryForm.name.trim())return;
@@ -372,8 +382,14 @@ function render(){
       break;
     case 'section': markup=sections.render();break;
     case 'unsaved': markup=screen.unsaved();break;
-    case 'cancel': markup=screen.heading('Отменить операцию?')+
-      `<div class="fr-unsaved-content"><p class="fr-unsaved-message">Остаток на счёте изменится.</p><div class="fr-unsaved-actions"><button type="button" class="fr-primary fr-cancel-confirm" data-action="cancel-confirm" ${busy?'disabled':''}>Отменить операцию</button><button type="button" class="fr-unsaved-discard" data-action="back" ${busy?'disabled':''}>Оставить операцию</button></div><p role="alert">${screen.esc(error)}</p></div>`;break;
+    case 'cancel': {
+      const balance=ledger.fact().balances[previous.accountId]-previous.amount;
+      const message=previous.kind==='income'&&!previous.pending&&balance<0
+        ? 'После отмены остаток на счёте станет отрицательным: '+screen.amountText(balance)+'.'
+        : 'Остаток на счёте изменится.';
+      markup=screen.heading('Отменить операцию?')+
+      `<div class="fr-unsaved-content"><p class="fr-unsaved-message">${screen.esc(message)}</p><div class="fr-unsaved-actions"><button type="button" class="fr-primary fr-cancel-confirm" data-action="cancel-confirm" ${busy?'disabled':''}>Отменить операцию</button><button type="button" class="fr-unsaved-discard" data-action="back" ${busy?'disabled':''}>Оставить операцию</button></div><p role="alert">${screen.esc(error)}</p></div>`;break;
+    }
     case 'history':
       markup=screen.heading('История изменений')+`<div class="np-body">${recordHistory(doc(),previous)}</div>`;break;
   }

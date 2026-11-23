@@ -87,10 +87,24 @@ function patch04(d) {
   archive(d,'accounts','archived-credit');
 }
 
+function categoryHistory(d) {
+  basic(d);
+  const save=(id,kind,amount,date,categoryId)=>saveOperation(d,{
+    id,kind,amount,date,accountId:'spare',allocations:[{categoryId,amount}]
+  });
+  save('past-ordinary-income','income',60000,'2026-10-25','salary-0');
+  save('past-food','expense',5000,'2026-10-26','food');
+  saveIncome(d,{id:'advance-plan',name:'Аванс',amount:100000,start:'2026-11-25',accountId:'spare',categoryId:'salary-0'});
+  confirmPlannedIncome(d,'advance-plan:once',{id:'spent-plan-income',amount:100000,date:'2026-11-22',today:'2026-11-23',
+    accountId:'spare',allocations:[{categoryId:'salary-0',amount:100000}]});
+  for(let i=1;i<=14;i++)save('child-food-'+i,'expense',9000,'2026-11-23','food-0');
+  save('other-category-expense','expense',10000,'2026-11-23','cafes');
+}
+
 try{
   await ledger.boot();
   const mode=new URLSearchParams(location.search).get('mode');
-  const seed={regression:basic,visual,audit,patch04}[mode];
+  const seed={regression:basic,visual,audit,patch04,categoryHistory}[mode];
   if(seed)await ledger.mutate('test.fixture',seed);
   const d=ledger.document();
   document.body.textContent=JSON.stringify({

@@ -429,6 +429,11 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-share-caption{margin:8px 0 4px;color:var(--dim);font-size:14px}
 #finrate .fr-share-caption small{font-size:inherit;white-space:nowrap}
 #finrate .fr-share-panel input[type=range]{display:block;box-sizing:border-box;margin-inline:0}
+#finrate .fr-share-history{padding-bottom:calc(90px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+#finrate .fr-share-history .fr-share-totals{padding-inline:0}
+#finrate .fr-share-history .fr-section-error{margin-inline:0}
+#finrate .fr-share-save{position:absolute;inset:auto 24px max(12px,env(safe-area-inset-bottom));z-index:2;pointer-events:none}
+#finrate .fr-share-save .fr-primary{width:100%;margin:0;box-shadow:0 6px 18px var(--palette-19);pointer-events:auto}
 #finrate .fr-screen:has([data-share-room]) .fr-title{font-size:19px;line-height:1.18}
 #finrate .fr-screen:has([data-share-room]) .fr-header{height:auto!important;padding-block:11px!important}
 #finrate .fr-screen:has([data-share-room]) .fr-back{top:50%!important;transform:translateY(-50%)}
@@ -462,7 +467,7 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-account-list-item .fr-type-dot{margin:0}
 #finrate [data-section-page] .fr-account-list-item .np-money{display:block;font-size:24px;letter-spacing:-.5px;margin-top:8px}
 #finrate .fr-account-section{padding-bottom:10px}
-#finrate .fr-screen:has(.fr-account-section)>.fr-section-tabs,
+#finrate .fr-screen>.fr-account-tabs,
 #finrate .fr-screen>.fr-income-plans-tabs,
 #finrate .fr-screen:has(.fr-credit-type) .fr-section-tabs{padding:4px;background:var(--soft);border-radius:18px}
 #finrate .fr-screen:has(.fr-credit-type) .fr-section-tabs{margin-inline:0}
@@ -632,7 +637,7 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-summary-breakdown .np-row{color:var(--dim);gap:8px;margin:0;padding:5px 4px;font-size:14px}
 #finrate .fr-summary-available{margin-top:8px;border-top:1px solid var(--line)}
 #finrate .fr-summary-available .fr-muted{margin:0 4px 10px}
-#finrate .fr-summary-menu .fr-section-secondary{border-radius:14px}
+#finrate .fr-summary-menu .fr-section-secondary{border-radius:14px;background:var(--soft)}
 #finrate .fr-info-dialog{width:min(320px,calc(100% - 40px));padding:0;border:0;border-radius:20px;background:var(--panel);color:var(--ink)}
 #finrate .fr-info-dialog::backdrop{background:#0004;touch-action:none}
 #finrate .fr-info-panel{padding:20px;outline:none}
