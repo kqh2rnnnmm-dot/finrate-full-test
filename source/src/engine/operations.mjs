@@ -72,7 +72,11 @@ export function cancelOperation(d,id){return apply(d,n=>{
   if(o.kind==='expense'&&n.operations.some(x=>x.kind==='refund'&&!x.cancelled&&x.referenceId===id))fail('REFUND_LINKED');
   if(o.referenceId&&o.kind==='expense')fail('FEE_LINKED');
   for(const x of n.operations.filter(x=>x.id===id||x.referenceId===id&&x.kind==='expense')){audit(n,x);x.cancelled=true;}
-  if(d.schema>=4){assertSpending(d,n);assertKnownCreditDates(d,n);}
+  if(d.schema>=4){
+    // Reversing a recorded income corrects the ledger even if the money was already spent.
+    if(o.kind!=='income')assertSpending(d,n);
+    assertKnownCreditDates(d,n);
+  }
   return true;
 });}
 export function progressTransfer(d,id,action,date){return apply(d,n=>{
