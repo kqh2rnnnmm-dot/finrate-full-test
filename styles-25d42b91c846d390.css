@@ -655,7 +655,14 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
   #finrate .fr-category-meter.fr-meter-over{background:#f3747c}
 }
 
-#finrate .fr-category-carousel{position:relative;flex:0 0 58px;margin:4px 24px 12px;border-radius:20px;background:var(--soft);overflow:hidden;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab}
+#finrate .fr-category-browser{--category-search-top:12px;--category-search-height:48px;--category-island-gap:12px;--category-island-height:58px;position:relative;display:flex;flex:1;min-height:0;flex-direction:column}
+#finrate .fr-category-browser .np-body{padding-block:calc(var(--category-search-top) + var(--category-search-height) + 12px) calc(var(--category-island-gap) + var(--category-island-height) + 12px);scroll-padding-block:calc(var(--category-search-top) + var(--category-search-height) + 8px) calc(var(--category-island-gap) + var(--category-island-height) + 8px);overscroll-behavior:contain}
+#finrate .fr-category-search{position:absolute;inset:var(--category-search-top) 48px auto;z-index:2;margin:0}
+#finrate .fr-category-search input{height:var(--category-search-height);box-shadow:0 4px 12px var(--palette-17)}
+#finrate .fr-subcategory-panel{margin-top:12px;padding-block:14px 8px}
+#finrate .fr-subcategory-panel .fr-section-title,#finrate .fr-subcategory-panel .np-link svg{color:var(--dim)}
+#finrate .fr-subcategory-panel .fr-section-name{white-space:normal;overflow-wrap:anywhere}
+#finrate .fr-category-carousel{position:absolute;inset:auto 24px var(--category-island-gap);z-index:2;height:var(--category-island-height);border-radius:20px;background:var(--soft);box-shadow:0 4px 12px var(--palette-17);overflow:hidden;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab}
 #finrate .fr-category-carousel-highlight{position:absolute;inset:5px auto 5px 50%;width:var(--highlight,114px);transform:translateX(-50%);background:var(--panel);border-radius:16px;transition:width .24s ease}
 #finrate .fr-category-carousel-rail{position:absolute;inset:0;transform:translateX(var(--drag,0px));transition:transform .24s ease}
 #finrate .fr-category-carousel-rail span{position:absolute;top:0;left:50%;line-height:58px;white-space:nowrap;color:var(--dim);font-size:17px;font-weight:600;transform:translateX(calc(-50% + var(--slide,0px)));transition:transform .24s ease,color .24s ease}
