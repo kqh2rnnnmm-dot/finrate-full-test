@@ -174,7 +174,16 @@ async function audit(browser,view,theme,version){
 
     await menu('Учёт','Категории');
     const rows=page.locator('[data-section-scroll]');
+    const searchIsland=page.getByRole('searchbox');
+    const typeIsland=page.getByRole('slider',{name:'Тип категорий'});
+    const beforeScroll=!before&&await Promise.all([searchIsland.boundingBox(),typeIsland.boundingBox()]);
     await rows.evaluate(el=>el.scrollTop=el.scrollHeight);
+    if(!before){
+      assert.deepEqual(await Promise.all([searchIsland.boundingBox(),typeIsland.boundingBox()]),beforeScroll);
+      assert.equal(await typeIsland.evaluate(el=>getComputedStyle(el).position),'absolute');
+      const sizes=await rows.evaluate(el=>({list:el.getBoundingClientRect().bottom,view:el.parentElement.getBoundingClientRect().bottom}));
+      assert.equal(sizes.list,sizes.view);
+    }
     const last=section('category','zz-long-expense');
     const visible=await last.evaluate(el=>({
       item:el.getBoundingClientRect().bottom,tab:document.querySelector('.fr-category-carousel, .fr-category-tab-island').getBoundingClientRect().top
@@ -183,6 +192,13 @@ async function audit(browser,view,theme,version){
     await shot('categories-last');
     await page.getByRole('searchbox').fill('Продукты');
     await section('category','food').click();
+    if(!before){
+      const subcategories=page.getByRole('region',{name:'Подкатегории',exact:true});
+      await subcategories.getByRole('button',{name:'Супермаркеты',exact:true}).click();
+      await heading('Супермаркеты');
+      await back();
+      await subcategories.waitFor();
+    }
     await section('share','food').click();
     await heading('Продукты');
     await page.getByRole('textbox',{name:'Процент Продукты'}).waitFor();

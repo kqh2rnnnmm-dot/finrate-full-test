@@ -544,15 +544,15 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'categories': {
         return heading('Категории','',ui.plus('category-type-new','Создать категорию'))+
-          ui.body(
-            `<div class="fr-payment-actions-search"><input type="search" data-section-search placeholder="Поиск" aria-label="Поиск категорий" value="${esc(s.query)}"></div>`+
-            `<div data-section-results>${categoryResults(s)}</div>`)+
-          `<div class="fr-category-carousel" role="slider" tabindex="0" aria-label="Тип категорий"
+          `<div class="fr-category-browser">
+            <div class="fr-payment-actions-search fr-category-search"><input type="search" data-section-search placeholder="Поиск" aria-label="Поиск категорий" value="${esc(s.query)}"></div>
+            ${ui.body(`<div data-section-results>${categoryResults(s)}</div>`)}
+          <div class="fr-category-carousel" role="slider" tabindex="0" aria-label="Тип категорий"
             aria-valuemin="1" aria-valuemax="3" aria-valuenow="${categoryTypes.findIndex(([id])=>id===s.tab)+1}"
             aria-valuetext="${categoryTypes.find(([id])=>id===s.tab)[1]}">
             <div class="fr-category-carousel-highlight" aria-hidden="true"></div>
             <div class="fr-category-carousel-rail" aria-hidden="true">${categoryTypes.map(([id,label])=>
-              `<span data-category-slide="${id}" ${id===s.tab?'data-current':''}>${label}</span>`).join('')}</div></div>`;
+              `<span data-category-slide="${id}" ${id===s.tab?'data-current':''}>${label}</span>`).join('')}</div></div></div>`;
       }
       case 'category-type-picker': return list('Тип категории',
         ui.link('Расходная','category-type-create','expense')+ui.link('Доходная','category-type-create','income')+ui.link('Накопительная','category-type-create','savings'));
@@ -564,7 +564,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         return list(c.name,(totals?ui.panel(ui.pair('План',totals.plan)+ui.pair('Расход',totals.spent)+ui.budgetBar(totals.plan,totals.spent)):'')+
           ui.link(c.type==='expense'?'Расходы':'Поступления','category-ops',c.id)+
           (totals?ui.link('Доля плана','share',c.id,ui.small(totals.bps/100+'%')):'')+
-          children.map(child=>ui.link(child.name,'category',child.id)).join('')+
+          (children.length?`<section class="fr-section-panel fr-subcategory-panel" aria-labelledby="fr-subcategory-heading">
+            <h2 class="fr-section-title" id="fr-subcategory-heading">Подкатегории</h2>
+            ${children.map(child=>ui.link(child.name,'category',child.id)).join('')}
+          </section>`:'')+
           (!c.parentId?ui.actionButton('Создать подкатегорию','subcategory-new'):'')+
           ui.actionButton('Переименовать','category-rename'));
       }
