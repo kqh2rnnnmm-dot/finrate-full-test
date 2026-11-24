@@ -199,3 +199,53 @@ test('Cancelling a spent income records the true balance and reopens the linked 
   assert.equal(d.operations.length,2);
   validateDocument(d);
 });
+
+test('Credit purchases preserve own funds and refunds and repayments target the correct debt',()=>{
+  const d=setup(),today='2026-11-22',card='credit';
+  addAccount(d,{id:card,name:'Кредитка с долгами',financeType:'credit',opening:-5000,
+    credit:{limit:100000,grace:{mode:'months',months:3},openingOwn:25000,
+      openingLots:[{due:'2026-10-31',amount:20000},{due:'2026-11-30',amount:10000}]}});
+  const summary=()=>creditSummary(d,card,today);
+  const purchase={...fact('credit-purchase','expense',12000,'food','2026-11-20',card),creditFunding:'purchase'};
+  saveOperation(d,purchase);
+  assert.equal(summary().own,25000);
+  assert.equal(summary().debt,42000);
+  assert.equal(summary().lots.find(lot=>lot.operationId===purchase.id).due,'2027-02-28');
+  const refund={...fact('credit-refund','refund',12000,'food',today,card),referenceId:purchase.id,
+    creditFunding:'refund',refundChoice:'keep'};
+  saveOperation(d,refund);
+  assert.deepEqual(summary().lots.map(l=>l.amount),[8000,10000,12000]);
+  const repayment={id:'own-repayment',kind:'transfer',date:today,accountId:card,toAccountId:card,
+    creditFunding:'own',creditRepayMonth:'2026-11',amount:6000};
+  assert.throws(()=>saveOperation(d,{...repayment,amount:10001}),{code:'CREDIT_OVERPAY'});
+  saveOperation(d,repayment);
+  assert.equal(saveOperation(d,repayment),false);
+  assert.deepEqual(summary().lots.map(l=>l.amount),[8000,4000,12000]);
+  assert.equal(summary().own,19000);
+  assert.equal(totals(d).expense,0);
+  assert.equal(totals(d).income,0);
+  const transfer={id:'withdraw-own',kind:'transfer',date:today,accountId:card,toAccountId:'cash',creditFunding:'own',amount:19000};
+  assert.throws(()=>saveOperation(d,{...transfer,amount:19001}),{code:'INSUFFICIENT_FUNDS'});
+  saveOperation(d,transfer);
+  assert.equal(summary().own,0);
+  assert.equal(summary().debt,24000);
+  cancelOperation(d,repayment.id);
+  assert.equal(summary().own,6000);
+  assert.equal(summary().debt,30000);
+  validateDocument(d);
+});
+
+test('A refund on a fully paid card credits only own funds and a debit refund restores the account',()=>{
+  const d=setup(),today='2026-11-22',card='credit';
+  addAccount(d,{id:card,name:'Погашенная карта',financeType:'credit',
+    credit:{limit:100000,grace:{mode:'months',months:1}}});
+  saveOperation(d,{...fact('purchase','expense',5000,'food',today,card),creditFunding:'purchase'});
+  saveOperation(d,{id:'repaid',kind:'transfer',accountId:'bank',toAccountId:card,amount:5000,date:today});
+  saveOperation(d,{...fact('refund-paid','refund',5000,'food',today,card),referenceId:'purchase',creditFunding:'refund',refundChoice:'keep'});
+  assert.equal(creditSummary(d,card,today).debt,0);
+  assert.equal(creditSummary(d,card,today).own,5000);
+  saveOperation(d,fact('debit-purchase','expense',3000,'food',today,'bank'));
+  saveOperation(d,{...fact('debit-refund','refund',1000,'food',today,'bank'),referenceId:'debit-purchase'});
+  assert.equal(totals(d).balances.bank,1993000);
+  assert.equal(totals(d).expense,2000);
+});

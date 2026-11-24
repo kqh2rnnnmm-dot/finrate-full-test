@@ -41,9 +41,14 @@ export function save(draft, previous) {
     if (!category || category.type!==draft.kind || category.archived || !account || account.archived) fail('SELECTION');
     const amount = money(draft.amount);
     if (amount<=0 || amount>99999999999 || draft.note.length>500) fail('AMOUNT');
+    if(previous&&doc.operations.some(o=>o.kind==='refund'&&o.referenceId===previous.id&&!o.cancelled)&&previous.accountId!==account.id)fail('REFUND_LINKED');
+    const credit=account.financeType==='credit';
+    const creditFunding=credit&&draft.kind==='expense'&&(previous?.creditFunding==='purchase'||previous?.accountId!==account.id)?'purchase':undefined;
+    const allocations=previous?.amount===amount&&previous.allocations[0]?.categoryId===draft.categoryId?
+      previous.allocations:[{categoryId:draft.categoryId,amount}];
     return saveOperation(doc,{
       id:draft.id, kind:draft.kind, accountId:draft.accountId, date:draft.date,
-      amount, note:draft.note, ...(draft.creditDueDate ? {creditDueDate:draft.creditDueDate} : {}), allocations:[{categoryId:draft.categoryId,amount}]
+      amount, note:draft.note, creditFunding, creditDueDate:credit?draft.creditDueDate||undefined:'', allocations
     },previous?{editId:previous.id,editBase:JSON.stringify(previous)}:undefined);
   });
 }

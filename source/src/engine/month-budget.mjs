@@ -1,3 +1,4 @@
+import {creditLedger} from './credit.mjs';
 import {addSafe, addCategory, rename, fail, totals} from './model.mjs';
 import {incomeOccurrences} from './planning.mjs';
 
@@ -149,7 +150,8 @@ export function savings(d) {
 
 export function availableMoney(d) {
   const {balances} = totals(d);
-  const actual = sum(d.accounts.filter(a=>!a.archived && a.financeType!=='credit').map(a=>balances[a.id]));
+  const credit=creditLedger(d);
+  const actual = sum(d.accounts.filter(a=>!a.archived).map(a=>credit.get(a.id)?.own??balances[a.id]));
   const reserved = sum(savings(d).filter(g=>!g.closed).map(g=>g.remaining));
   return {actual,reserved,available: data(d).excludeSavings ? addSafe(actual,-reserved) : actual};
 }

@@ -367,10 +367,6 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate [data-marked]::after{content:'';position:absolute;bottom:2px;left:calc(50% - 2px);width:4px;height:4px;border-radius:50%;background:var(--palette-20)}
 #finrate .fr-history-change{display:grid;gap:4px;margin-top:10px;font-size:15px;overflow-wrap:anywhere}
 #finrate .fr-history-change span,#finrate .fr-history-change del{color:var(--dim)}
-#finrate .fr-credit-type{padding:0 24px 8px}
-#finrate .fr-credit-menu{position:absolute;z-index:3;right:16px;top:68px;width:min(260px,calc(100% - 32px));padding:12px;border-radius:18px;background:var(--panel);box-shadow:0 6px 20px var(--palette-19)}
-#finrate .fr-credit-repay{display:flex;flex-direction:column;flex:none}
-#finrate .fr-credit-repay .fr-primary{margin-top:8px}
 #finrate .fr-category-group-row{padding:0 0 12px;border-bottom:1px solid var(--line)}
 #finrate [data-section-page] .fr-payment-actions-search{padding-inline:0}
 #finrate .fr-goal-preview{padding-bottom:26px;margin:0 0 12px;text-align:left}
@@ -396,13 +392,6 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-calendar-toggle{width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:12px;background:var(--panel);font-size:20px}
 #finrate .fr-account-section{padding:4px 0 18px}
 #finrate .fr-account-section .fr-section-title{color:var(--dim)}
-#finrate .fr-credit-type{text-align:center}
-#finrate .fr-credit-figures{margin-bottom:18px}
-#finrate .fr-credit-expandable{--credit-rows:1fr;--credit-opacity:1;display:grid;grid-template-rows:var(--credit-rows);opacity:var(--credit-opacity);transition:grid-template-rows .18s ease,opacity .18s ease}
-#finrate .fr-credit-expandable[data-credit-folded=true]{--credit-rows:0fr;--credit-opacity:0}
-#finrate .fr-credit-expandable>div{min-height:0;overflow:hidden}
-#finrate .fr-credit-expandable.fr-credit-dragging{transition:none}
-@media(prefers-reduced-motion:reduce){#finrate .fr-credit-expandable{transition:none}}
 
 /* Keep the update message inside the safe area and above the active screen. */
 #finrate .fr-app{display:flex;flex-direction:column}
@@ -467,10 +456,7 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-account-list-item .fr-type-dot{margin:0}
 #finrate [data-section-page] .fr-account-list-item .np-money{display:block;font-size:24px;letter-spacing:-.5px;margin-top:8px}
 #finrate .fr-account-section{padding-bottom:10px}
-#finrate .fr-screen>.fr-account-tabs,
-#finrate .fr-screen>.fr-income-plans-tabs,
-#finrate .fr-screen:has(.fr-credit-type) .fr-section-tabs{padding:4px;background:var(--soft);border-radius:18px}
-#finrate .fr-screen:has(.fr-credit-type) .fr-section-tabs{margin-inline:0}
+#finrate .fr-screen>.fr-income-plans-tabs{padding:4px;background:var(--soft);border-radius:18px}
 #finrate .fr-transfer-accounts-body{padding-top:12px}
 #finrate .fr-transfer-field h2{margin:0 0 12px;color:var(--dim);font-size:16px;font-weight:500}
 #finrate .fr-transfer-choice{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:110px;width:100%;padding:18px 20px;border:0;border-radius:22px;background:var(--panel);text-align:left}
@@ -486,13 +472,8 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-screen:has([data-section-action=transfer-save]) .fr-transfer-choice{background:transparent;padding:0;min-height:70px}
 #finrate .fr-screen:has([data-section-action=transfer-save]) [data-section-action=transfer-edit-amount] .np-money{font-size:clamp(22px,8vw,34px)}
 
-#finrate .fr-credit-figures{text-align:center;margin-bottom:18px}
-#finrate .fr-credit-main-debt{padding:0;margin:4px 0 18px;border:0;background:transparent;color:var(--palette-24);font-size:clamp(24px,8.7vw,34px);font-weight:650;line-height:1.25;letter-spacing:-1px;white-space:nowrap;text-shadow:0 0 20px var(--palette-25)}
-#finrate .fr-credit-values .np-row{margin:0 0 8px;text-align:left;color:var(--dim);font-size:14px}
-#finrate .fr-credit-values .np-money{color:var(--ink);font-size:16px}
 #finrate .fr-credit-due-row{padding:10px 0 12px}
 #finrate .fr-credit-due-row .np-money{color:var(--palette-24)}
-#finrate .fr-credit-repay .fr-primary{box-shadow:0 8px 24px var(--palette-15)}
 
 #finrate .fr-payment-screen{display:flex;flex-direction:column;min-height:0;flex:1;background:var(--bg)}
 #finrate .fr-payment-screen--planned{background:var(--planned-background)}
@@ -508,10 +489,6 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-unsaved-actions .fr-primary,#finrate .fr-unsaved-actions .fr-unsaved-discard{width:100%;margin:0;min-height:56px}
 
 #finrate [data-section-page] .fr-month-title{text-transform:none}
-#finrate [data-section-page]:has(.fr-credit-type) .fr-title[data-full-name]{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#finrate [data-section-page]:has(.fr-credit-type) .fr-title.fr-full-name{white-space:normal;text-overflow:clip}
-#finrate [data-section-page] .fr-credit-values .np-money{font-size:16px}
-#finrate [data-section-page]:has(.fr-credit-type) .fr-header:has(.fr-full-name){height:auto!important;padding-block:10px!important}
 
 /* Keep the first number on summary and detail screens visually primary. */
 #finrate .fr-amount-overview{padding:12px 0 18px}
@@ -565,10 +542,6 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-filter-count{display:grid;place-items:center;min-width:20px;height:20px;padding:0 4px;border-radius:20px;background:var(--palette-11);color:var(--palette-12);font-weight:650}
 #finrate .fr-version{font-size:13px}
 
-#finrate .fr-credit-zero{margin:8px 0 18px;font-size:24px;font-weight:650}
-#finrate .fr-credit-main-debt{min-height:44px;margin-bottom:4px}
-#finrate .fr-credit-next-due{margin:0 0 16px;font-size:14px;color:var(--dim)}
-#finrate .fr-credit-next-due strong{color:var(--ink)}
 #finrate .fr-transfer-total{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;text-align:left;padding:0;border:0;background:transparent}
 #finrate .fr-transfer-total svg{width:20px;height:20px;color:var(--dim)}
 #finrate .fr-transfer-field h2{font-weight:650}
@@ -638,7 +611,7 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-summary-available{margin-top:8px;border-top:1px solid var(--line)}
 #finrate .fr-summary-available .fr-muted{margin:0 4px 10px}
 #finrate .fr-summary-menu .fr-section-secondary{border-radius:14px;background:var(--soft)}
-#finrate .fr-info-dialog{width:min(320px,calc(100% - 40px));padding:0;border:0;border-radius:20px;background:var(--panel);color:var(--ink)}
+#finrate .fr-info-dialog{position:fixed;inset:auto;margin:0;width:min(320px,calc(100% - 40px));padding:0;border:0;border-radius:20px;background:var(--panel);color:var(--ink)}
 #finrate .fr-info-dialog::backdrop{background:#0004;touch-action:none}
 #finrate .fr-info-panel{padding:20px;outline:none}
 #finrate .fr-info-panel p{margin:8px 0 0;line-height:1.45}
@@ -677,3 +650,49 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 }
 
 #finrate .fr-backup-download{display:flex;align-items:center;justify-content:center;text-decoration:none}
+
+
+/* Fixed controls sit above the scrolling surface. Only the controls receive taps. */
+#finrate .fr-screen:has(.fr-action-islands),#finrate .fr-screen:has(>.np-body+.fr-primary),#finrate .fr-section-form{position:relative;--island-bottom:max(18px,env(safe-area-inset-bottom));--island-space:96px}
+#finrate .fr-action-islands,#finrate .fr-screen:has(>.np-body+.fr-primary)>.fr-primary,#finrate .fr-section-form>.fr-primary{position:absolute;inset:auto 24px var(--island-bottom);z-index:2;margin:0}
+#finrate .fr-action-islands{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;background:transparent;pointer-events:none}
+#finrate .fr-action-islands.fr-action-pair{grid-template-columns:minmax(0,1fr) minmax(68px,auto)}
+#finrate .fr-action-islands .fr-primary{width:100%;margin:0;pointer-events:auto}
+#finrate .fr-action-islands .fr-primary,#finrate .fr-screen:has(>.np-body+.fr-primary)>.fr-primary,#finrate .fr-section-form>.fr-primary{border-radius:20px;box-shadow:0 6px 18px var(--palette-19)}
+#finrate .fr-screen:has(>.np-body+.fr-primary)>.np-body,#finrate .fr-section-form>.np-body,#finrate .fr-accounts-active>.np-body{padding-bottom:var(--island-space);scroll-padding-bottom:var(--island-space)}
+#finrate .fr-accounts-browser,#finrate .fr-account-static{position:relative;display:flex;flex:1;min-height:0;flex-direction:column}
+#finrate .fr-accounts-browser>.np-body{padding-top:68px;scroll-padding-top:68px;overscroll-behavior:contain}
+#finrate .fr-accounts-browser>.fr-account-tabs{position:absolute;inset:4px 24px auto;z-index:2;margin:0;padding:4px;background:var(--soft);border-radius:18px;box-shadow:0 3px 12px var(--palette-17)}
+#finrate .fr-account-static{margin-bottom:calc(var(--island-bottom) + 60px)}
+#finrate .fr-account-static>.np-body{overflow:hidden;padding-block:10px 0}
+#finrate .fr-account-total{position:relative;display:flex;min-height:65px;align-items:center;padding:18px 50px 16px 16px;border-radius:21px;background:var(--panel)}
+#finrate [data-section-page] .fr-account-total>.np-money{font-size:clamp(24px,8.5vw,37px);letter-spacing:-.7px;white-space:normal;overflow-wrap:anywhere}
+#finrate .fr-account-info{position:absolute;inset:3px 4px auto auto;width:42px;height:42px;display:grid;place-items:center;border:0;border-radius:14px;background:transparent;color:var(--dim)}
+#finrate .fr-account-info svg{width:18px;height:18px}
+#finrate .fr-account-kind{display:flex;align-items:center;gap:10px;margin:7px 0 10px}
+#finrate .fr-account-static .fr-section-tabs{margin:0 0 4px;padding:4px;background:var(--soft);border-radius:16px;display:grid;grid-template-columns:1.65fr 1fr}
+#finrate .fr-account-static .fr-section-tabs button{font-size:13px;white-space:normal;line-height:1.15}
+#finrate .fr-account-static .fr-section-title{margin:4px 0 0}
+#finrate .fr-account-recent .fr-operation-date{margin:6px 0 0;font-size:12px}
+#finrate .fr-account-recent .fr-operation-row{margin:0;padding-block:8px;min-height:42px}
+#finrate .fr-account-static .fr-credit-due-row{padding:5px 0}
+#finrate .fr-account-periods+.fr-section-secondary{min-height:40px;margin:4px 0;padding:6px}
+#finrate .fr-account-static [hidden]{display:none!important}
+#finrate .fr-action-islands .fr-account-more{background:var(--soft);color:var(--ink)}
+#finrate .fr-account-popover-layer{position:absolute;inset:0;z-index:8}
+#finrate .fr-account-dismiss{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent}
+#finrate .fr-account-popover{position:absolute;right:24px;top:68px;width:min(268px,calc(100% - 48px));max-height:calc(100% - 90px);overflow:auto;overscroll-behavior:contain;padding:12px;border-radius:20px;background:var(--panel);box-shadow:0 8px 26px var(--palette-19)}
+#finrate .fr-account-popover-info p{margin:2px;line-height:1.4}
+#finrate .fr-account-popover-actions .fr-section-secondary{margin:0;min-height:44px;background:transparent}
+#finrate .fr-account-popover-actions .fr-section-secondary:active{background:var(--soft)}
+#finrate .fr-account-popover-more{inset:auto 24px calc(max(18px,env(safe-area-inset-bottom)) + 63px);width:auto}
+#finrate .fr-account-popover-more .fr-section-panel{margin:0 0 8px;background:var(--soft)}
+#finrate .fr-account-popover-more .np-link,#finrate .fr-account-popover-more .fr-section-secondary{padding:10px 12px;margin:6px 0 0;border-radius:14px;background:var(--palette-11);color:var(--palette-12);width:100%}
+#finrate .fr-section-field input[type=date]{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+#finrate .fr-repay-choice{display:flex;justify-content:space-between;align-items:center;text-align:left;gap:12px;width:100%;min-height:46px;margin-bottom:6px;padding:8px 12px;border:0;border-radius:14px;background:var(--panel);font-size:15px}
+#finrate .fr-repay-choice[aria-pressed=true]{background:var(--palette-11);color:var(--palette-12)}
+#finrate .fr-screen:has(>.fr-filters-body),#finrate .fr-screen:has(>.fr-payment-actions-list+.fr-primary){position:relative;--island-bottom:max(18px,env(safe-area-inset-bottom));--island-space:96px}
+#finrate .fr-screen>.fr-filter-actions,#finrate .fr-screen:has(>.fr-payment-actions-list+.fr-primary)>.fr-primary{position:absolute;inset:auto 24px var(--island-bottom);z-index:2;margin:0}
+#finrate .fr-screen>.fr-filter-actions{background:transparent;pointer-events:none}
+#finrate .fr-screen>.fr-filter-actions button{pointer-events:auto;box-shadow:0 6px 18px var(--palette-19)}
+#finrate .fr-screen>.fr-filters-body,#finrate .fr-screen:has(>.fr-payment-actions-list+.fr-primary)>.fr-payment-actions-list{padding-bottom:var(--island-space);scroll-padding-bottom:var(--island-space)}
