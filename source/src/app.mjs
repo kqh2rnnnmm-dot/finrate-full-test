@@ -1,3 +1,4 @@
+import {anchorPopover,animatePopover,bindSelectPopovers,pressFeedback} from './popovers.mjs';
 import {spendingRoom, isCredit} from './engine/credit.mjs';
 import {editAmount,normalizedAmount,validAmount} from './amount-pad.mjs';
 import {bindUpdate} from './update.mjs';
@@ -12,6 +13,7 @@ import {bindMenuGlyph,bindTrack} from './motion.mjs';
 
 const root=document.querySelector('#finrate');
 const host=root.querySelector('.fr-route-host');
+bindSelectPopovers(host);
 const menuButton=root.querySelector('.fr-persistent-menu');
 const updateMenu=bindMenuGlyph(menuButton);
 const parseMonth=date=>{const [year,month]=date.slice(0,7).split('-').map(Number);return new Date(year,month-1,15,12);};
@@ -304,20 +306,19 @@ function action(id){
       const dialog=host.querySelector('.fr-info-dialog');
       const trigger=host.querySelector('[data-action=month-result-info]');
       if(!dialog||dialog.open)return;
-      let start=null;
-      dialog.onpointerdown=event=>{start=event.target===dialog?[event.clientX,event.clientY]:null;};
-      dialog.onpointercancel=()=>{start=null;};
-      dialog.onpointerup=event=>{
-        const moved=start&&Math.hypot(event.clientX-start[0],event.clientY-start[1])>24;
-        start=null;
-        if(moved&&event.target===dialog)setTimeout(()=>{if(dialog.open)dialog.close();},300);
+      const close=()=>{
+        if(dialog.dataset.closing)return;
+        dialog.dataset.closing='true';
+        animatePopover(dialog,true).then(()=>{
+          dialog.close();delete dialog.dataset.closing;trigger.focus({preventScroll:true});
+        });
       };
-      dialog.onclick=event=>{if(event.target===dialog){event.stopPropagation();dialog.close();}};
-      dialog.addEventListener('close',()=>trigger.blur(),{once:true});
+      dialog.onclick=event=>{if(event.target===dialog)close();};
+      dialog.oncancel=event=>{event.preventDefault();close();};
+      pressFeedback(trigger);
       dialog.showModal();
-      const anchor=trigger.getBoundingClientRect(), width=dialog.offsetWidth;
-      dialog.style.top=(anchor.bottom+6)+'px';
-      dialog.style.left=Math.max(12,Math.min(anchor.right-width,document.documentElement.clientWidth-width-12))+'px';
+      anchorPopover(dialog,trigger);
+      animatePopover(dialog);
       return;
     }
     case 'first-account':
@@ -340,7 +341,18 @@ function action(id){
     case 'accept-note':
       if(note.length<=500&&!previous?.cancelled)draft.note=note;
       return showReview();
-    case 'category-create-menu': showCreate=!showCreate;return render();
+    case 'category-create-menu': {
+      const popover=host.querySelector('.fr-operation-create-menu');
+      if(popover){
+        if(popover.dataset.closing)return;
+        popover.dataset.closing='true';
+        return animatePopover(popover,true).then(()=>{if(popover.isConnected){showCreate=false;render();}});
+      }
+      showCreate=true;render();
+      pressFeedback(host.querySelector('.fr-category-new[data-action=category-create-menu]'));
+      animatePopover(host.querySelector('.fr-operation-create-menu'));
+      return;
+    }
     case 'new-category': case 'new-subcategory':
       categoryForm={sub:id==='new-subcategory',name:query.trim(),initial:'',parentId:categoryRoot,error:''};
       showCreate=false;return move('category-new');
@@ -371,7 +383,7 @@ function render(){
     case 'date': markup=screen.calendar(draft.kind,calendar.getFullYear(),calendar.getMonth(),draft.date,localDate());break;
     case 'credit-date': markup=screen.calendar(draft.kind,calendar.getFullYear(),calendar.getMonth(),draft.creditDueDate,localDate(),'Срок погашения');break;
     case 'account':
-      markup=screen.accounts(doc(),ledger.fact().balances,accountChoice,draft.kind,selectedAccountWarning());break;
+      markup=screen.accounts(doc(),ledger.fact().balances,accountChoice,draft.kind,{...selectedAccountWarning(),primaryId:primaryAccount(doc())?.id});break;
     case 'review': {
       const rootId=rootCategory(doc(),draft.categoryId);
       const category=draft.kind==='expense'&&monthlyOverview(doc(),draft.date.slice(0,7)).categories.find(c=>c.id===rootId);
@@ -426,6 +438,8 @@ function monthChange(delta){
 
 host.addEventListener('click',event=>{
   if(busy)return;
+  if(route==='category'&&showCreate&&!event.target.closest('.fr-operation-create-menu,[data-action=category-create-menu],.fr-back'))
+    return action('category-create-menu');
   const summary=event.target.closest('summary');
   if(summary&&route==='menu'){
     event.preventDefault();
@@ -472,7 +486,7 @@ host.addEventListener('input',event=>{
     pendingFilters[input.name]=input.value;
     if(input.name==='kind'){
       if(input.value&&doc().categories.find(c=>c.id===pendingFilters.category)?.type!==input.value)delete pendingFilters.category;
-      render();host.querySelector('[name=kind]').focus({preventScroll:true});
+      render();host.querySelector('[data-select-trigger=kind]').focus({preventScroll:true});
     }
   }
   if(input.matches('[data-filter-search]')){

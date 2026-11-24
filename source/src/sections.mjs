@@ -1,4 +1,4 @@
-import {accountMark, amountText, dateText, esc, heading, icon, monthHeader, primary, categoryLabel, operationRows, budgetBar} from './screens.mjs';
+import {accountCardContents, amountText, dateText, esc, heading, icon, monthHeader, primary, categoryLabel, operationRows, budgetBar} from './screens.mjs';
 
 export const link = (label, action, id='', detail='') =>
   `<button type="button" class="np-link" data-section-action="${action}" data-id="${esc(id)}"><span><span class="fr-section-name" data-full-name>${esc(label)}</span>${detail}</span>${icon('next')}</button>`;
@@ -22,9 +22,12 @@ export function field({key,label,type='text',options,placeholder='',required=tru
     return `<div class="fr-section-field"><span>${esc(label)}</span><button type="button" class="fr-form-account" data-section-action="form-account" aria-label="Счёт: ${esc(name||'Выбрать счёт')}">
       <span class="fr-form-account-copy"><strong>${esc(name||'Выбрать счёт')}</strong>${id?mark:''}</span>${icon('next')}</button></div>`;
   }
-  const control = options
-    ? `<select name="${key}" ${required?'required':''}>${options.map(([id,label])=>option(id,label,value)).join('')}</select>`
-    : type==='checkbox'
+  if(type==='category-picker')return `<div class="fr-section-field"><span>${esc(label)}</span>
+    <button type="button" class="fr-field-trigger" data-section-action="form-category-open">${esc(options.find(([id])=>id===value)?.[1]||'Выбрать категорию')}${icon('next')}</button></div>`;
+  if(options)return `<div class="fr-section-field fr-select-field"><span>${esc(label)}</span>
+    <button type="button" class="fr-field-trigger" data-select-trigger="${esc(key)}" aria-label="${esc(label)}" aria-haspopup="dialog" aria-expanded="false"><span data-select-caption>${esc(options.find(([id])=>String(id)===String(value))?.[1]||options[0]?.[1]||'Выбрать')}</span>${icon('down')}</button>
+    <select tabindex="-1" aria-hidden="true" aria-label="${esc(label)}" name="${esc(key)}" ${required?'required':''}>${options.map(([id,label])=>option(id,label,value)).join('')}</select></div>`;
+  const control = type==='checkbox'
       ? `<input type="checkbox" name="${key}" ${value?'checked':''}>`
       : `<input type="${type==='money'?'text':type}" ${type==='money'?'inputmode="decimal" data-decimal':''} name="${key}" ${type==='file'?'accept=".json,application/json"':`value="${esc(type==='money'?decimal(value):value)}"`} ${min?`min="${esc(min)}"`:''} ${max?`max="${esc(max)}"`:''} placeholder="${esc(placeholder)}" maxlength="${maxlength}" ${required?'required':''} autocomplete="off">`;
   return `<label class="fr-section-field ${type==='checkbox'?'fr-check-field':''}"><span>${esc(label)}</span>${control}</label>`;
@@ -47,7 +50,7 @@ export function amountOverview(value,{label='',caption=''}={}) {
 
 export function summary(month, budget, period) {
   const result = amountText(budget.result);
-  return heading('Сводка','',`<button type="button" class="fr-category-new" data-section-action="budget-settings" aria-label="Настройки сводки">${icon('settings')}</button>`)+monthControl(month)+body(
+  return heading('Сводка','',`<button type="button" class="fr-category-new" data-section-action="budget-settings" aria-label="Настройки сводки">${icon('gear')}</button>`)+monthControl(month)+body(
     `<div class="fr-summary-card">
       <div class="fr-month-result"><strong class="np-money ${result.length>11?'fr-result-long':''}" aria-label="Результат месяца ${esc(result)}">${result}</strong>
         <button type="button" data-action="month-result-info" aria-label="Как считается результат месяца" aria-haspopup="dialog">${icon('info')}</button>
@@ -149,8 +152,7 @@ export function closedGoalDetail(goal,history,d,expanded) {
 
 export function accountCard(account,balance,primaryAccount=false) {
   return `<button type="button" class="fr-typed-account fr-account-list-item ${primaryAccount?'fr-main-account-row':''}" data-section-action="account" data-id="${esc(account.id)}">
-    <span class="fr-typed-account-name">${accountMark(account,false)}<strong>${esc(account.name)}</strong></span>
-    ${moneyLabel(balance)}</button>`;
+    ${accountCardContents(account,balance)}</button>`;
 }
 
 export function ledgerRow(name,action,id,amount,meta='') {

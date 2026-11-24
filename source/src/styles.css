@@ -696,3 +696,34 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-screen>.fr-filter-actions{background:transparent;pointer-events:none}
 #finrate .fr-screen>.fr-filter-actions button{pointer-events:auto;box-shadow:0 6px 18px var(--palette-19)}
 #finrate .fr-screen>.fr-filters-body,#finrate .fr-screen:has(>.fr-payment-actions-list+.fr-primary)>.fr-payment-actions-list{padding-bottom:var(--island-space);scroll-padding-bottom:var(--island-space)}
+
+/* Account choice uses the card typography and primary-account surface. */
+#finrate button.fr-typed-account[data-account].fr-account-list-item{display:block;position:relative;min-height:92px;padding:15px 36px 18px 0;border-radius:18px}
+#finrate button.fr-typed-account[data-account].fr-main-account-row{padding-left:12px}
+#finrate button.fr-typed-account[data-account]>.np-money{display:block;margin-top:8px;font-size:24px;letter-spacing:-.5px;overflow-wrap:anywhere}
+#finrate button.fr-typed-account[data-account]>svg{position:absolute;top:17px;right:12px}
+#finrate .fr-account-recent:has(.fr-recent-operation){padding:3px 12px;background:var(--panel);border-radius:18px}
+#finrate .fr-recent-operation{display:grid;grid-template-columns:minmax(0,1fr) auto 14px;align-items:center;gap:6px;width:100%;min-height:49px;padding:7px 0;border:0;background:none;text-align:left;font-size:16px;line-height:1.25}
+#finrate .fr-recent-operation small{display:block;color:var(--dim);font-size:14px;margin-top:2px}
+#finrate .fr-recent-operation strong{font-size:16px;white-space:nowrap}
+#finrate .fr-recent-operation svg{width:14px}
+#finrate .fr-account-history-rows .fr-operation-amount{font-size:16px;font-weight:650}
+#finrate .fr-account-history-rows .fr-operation-date,#finrate .fr-account-history-rows .fr-operation-account{font-size:15px}
+#finrate .fr-account-history-rows .fr-operation-category{font-size:17px}
+#finrate .fr-section-tabs button[aria-pressed=true]{font-size:clamp(12px,3.7vw,16px);font-weight:750}
+#finrate .fr-account-static .fr-section-tabs button[aria-pressed=true]{font-size:14px}
+#finrate .fr-category-carousel [data-current]{font-size:18px;font-weight:750}
+#finrate [aria-label="Настройки сводки"] svg{filter:none}
+#finrate .fr-select-field{position:relative}
+#finrate .fr-select-field select{position:absolute;inset:auto auto 0 0;width:1px;height:1px;min-height:0;padding:0;opacity:0;pointer-events:none}
+#finrate .fr-field-trigger{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px;padding:8px 12px;width:100%;border:1px solid var(--line);border-radius:14px;background:var(--panel);text-align:left;font-size:16px}
+#finrate .fr-field-trigger svg{flex:none;width:18px;height:18px}
+#finrate .fr-field-trigger:focus:not(:focus-visible){outline:none}
+#finrate .fr-select-popover{position:fixed;inset:auto;margin:0;width:240px;box-sizing:border-box;padding:6px;border:0;border-radius:18px;background:var(--panel);color:var(--ink);box-shadow:0 8px 26px var(--palette-19);overscroll-behavior:contain}
+#finrate .fr-select-popover::backdrop{background:transparent}
+#finrate .fr-select-popover button{display:block;width:100%;min-height:44px;padding:8px 12px 8px 32px;position:relative;background:none;border:0;border-radius:12px;text-align:left;font-size:16px}
+#finrate .fr-select-popover button[aria-pressed=true]::before{content:'✓';position:absolute;left:10px}
+#finrate .fr-account-popover{transform-origin:top right}
+#finrate .fr-account-popover-more{transform-origin:bottom right}
+#finrate .fr-operation-create-menu{transform-origin:top right}
+#finrate .fr-summary-dialog{transform-origin:bottom center}

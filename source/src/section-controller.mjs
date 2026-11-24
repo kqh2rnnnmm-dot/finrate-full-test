@@ -1,7 +1,8 @@
+import {animatePopover,pressFeedback} from './popovers.mjs';
 import {editAmount,normalizedAmount,validAmount} from './amount-pad.mjs';
 import * as ledger from './ledger.mjs';
 import * as ui from './sections.mjs';
-import {heading, esc, amountText, dateText, operationRows, accountMark, categoryLabel, keypad, enteredMoney, icon, unsaved} from './screens.mjs';
+import {heading, esc, amountText, dateText, recentOperationRows, operationRows, categoryRows, accountMark, categoryLabel, keypad, enteredMoney, icon, unsaved} from './screens.mjs';
 import {addAccount, addCategory, archive, money, rename, uid, fail, postings, addSafe} from './engine/model.mjs';
 import {saveOperation, cancelOperation, localDate, refundRemaining} from './engine/operations.mjs';
 import {reconcileAccount, restoreAccount, categoryAction, setAccountPolicy, transferPreview} from './engine/block02.mjs';
@@ -100,21 +101,24 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   function restoreSummaryMore(s) {
     const dialog = host.querySelector('.fr-summary-dialog');
     if (!s.more || !dialog || dialog.open) return;
-    dialog.onclick = event => {
-      if (event.target === dialog) {
-        event.stopPropagation();
-        dialog.close();
-      }
+    const close=()=>{
+      if(dialog.dataset.closing)return;
+      dialog.dataset.closing='true';
+      animatePopover(dialog,true).then(()=>{dialog.close();delete dialog.dataset.closing;});
     };
+    dialog.onclick=event=>{if(event.target===dialog){event.stopPropagation();close();}};
+    dialog.oncancel=event=>{event.preventDefault();close();};
     dialog.addEventListener('close',()=>{
       if (dialog.isConnected) s.more = false;
     },{once:true});
+    pressFeedback(host.querySelector('[data-section-action="summary-more"]'));
     dialog.showModal();
+    animatePopover(dialog);
   }
   function back() {
     if (busy) return;
     const more=host.querySelector('.fr-summary-dialog[open]');
-    if (more) return more.close();
+    if (more) return more.dispatchEvent(new Event('cancel',{cancelable:true}));
     if(state().accountPanel)return action('account-panel-close');
     if (dirty(state())) enter('discard');
     else pop();
@@ -484,7 +488,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const fields = [text('name','Название'),number('amount','Сумма'),day('start','Дата'),
       choices('amountMode','Вид суммы',[['fixed','Фиксированная'],['variable','Ориентировочная']]),
       choices('method','Способ',[['manual','Вручную'],['bank','В банке']]),
-      choices('accountId','Счёт',accountOptions()),choices('categoryId','Категория / подкатегория',categoryOptions('expense'))];
+      choices('accountId','Счёт',accountOptions()),{key:'categoryId',label:'Категория / подкатегория',type:'category-picker',options:categoryOptions('expense')}];
     if (occurrence?.paid) fields.splice(fields.findIndex(f=>f.key==='categoryId'),1);
     if (!occurrence) fields.splice(3,0,choices('repeat','Повторение',Object.entries(payments.PAYMENT_REPEATS)));
     form(occurrence||plan?'Изменить платёж':'Новый платёж',fields,{
@@ -574,7 +578,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       '<button type="button" class="fr-account-info" data-section-action="account-panel-info" aria-label="О сумме" aria-expanded="'+(s.accountPanel==='info')+'">'+icon('info')+'</button></div>'+
       '<div class="fr-account-kind">'+accountMark(a)+(a.archived?ui.small('В архиве'):'')+'</div>'+tabs+
       (credit&&s.tab!=='history'?'<div class="fr-account-periods">'+(creditPeriods(credit)||ui.empty('Долга нет.'))+'</div>'+ui.actionButton('Все сроки','credit-periods'):
-        (credit?'':'<h2 class="fr-section-title">Последние операции</h2>')+'<div class="fr-account-recent">'+operationList(recent)+'</div>'));
+        (credit?'':'<h2 class="fr-section-title">Последние операции</h2>')+'<div class="fr-account-recent">'+recentOperationRows(d,recent,a.id)+'</div>'));
     return heading(a.name,'',accountMenu('account-panel-actions',s.accountPanel==='actions',credit?'Действия с картой':'Действия со счётом'),true)+
       '<div class="fr-account-static">'+body+'</div>'+bottom(actionIsland(credit?'Погасить долг':'Перевод',credit?'credit-repay':'account-transfer',a.archived||!!credit&&!credit.debt),
         '<button type="button" class="fr-primary fr-account-more" data-section-action="account-panel-more" aria-expanded="'+(s.accountPanel==='more')+'">Ещё</button>')+
@@ -673,6 +677,14 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
               data-section-action="toggle-savings">Показывать накопления в результате месяца
               <span aria-hidden="true"></span></button></section>`+ui.link('Сводка с даты','summary-range-filter')+(s.error?ui.empty(s.error):''));
       }
+      case 'form-categories': {
+        const rows=paymentCategoryRows(s);
+        const add=ui.actionButton('Создать категорию','form-category-new')+ui.actionButton('Создать подкатегорию','form-subcategory-parent');
+        return list('Категория','<input type="search" class="fr-input" data-payment-category-search aria-label="Поиск категории" placeholder="Поиск" value="'+esc(s.query)+'"><div data-payment-category-results>'+rows+'</div>'+add);
+      }
+      case 'form-subcategory-parent':
+        return list('В какую категорию?',d.categories.filter(c=>c.type==='expense'&&!c.parentId&&!c.archived&&!c.mergedInto)
+          .map(c=>`<button type="button" class="fr-operation-picker-choice" data-section-action="form-category-new" data-id="${esc(c.id)}">${esc(c.name)}</button>`).join('')||ui.empty('Сначала создайте категорию.'));
       case 'form-accounts': {
         const selected=currentAccount(s.accountId);
         const shortfall=s.owner.isPayment&&selected?budget.expenseShortfall(selected,ledger.fact().balances[selected.id],
@@ -784,7 +796,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           const next=rows[i+1]?.before||currentAccount(s.id);
           return ui.panel(ui.small(dateText(r.at.slice(0,10)))+
             (r.before.name!==next.name?`<div class="fr-history-change"><del>${esc(r.before.name)}</del><strong>${esc(next.name)}</strong></div>`:'Условия счёта изменены'));
-        }).reverse().join('')+operationList(accountOperations(d,s.id)));
+        }).reverse().join('')+'<div class="fr-account-history-rows">'+operationList(accountOperations(d,s.id))+'</div>');
       case 'transfer-amount': return keypad('',s.buffer,validAmount(s.buffer),s.title,'transfer-accept');
       case 'transfer-accounts': {
         const x=s.draft;
@@ -1127,6 +1139,22 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'budget-settings': return enter('budget-settings',{month:s.month||todayMonth()});
       case 'money': return enter('money');
       case 'savings': return enter('savings');
+      case 'form-category-open': return enter('form-categories',{owner:s,query:''});
+      case 'form-category-select': {
+        s.owner.values.categoryId=id;
+        s.owner.fields.find(f=>f.key==='categoryId').options=categoryOptions('expense');
+        return pop();
+      }
+      case 'form-subcategory-parent': return enter(name);
+      case 'form-category-new': {
+        const categoryId=uid();
+        return form(id?'Новая подкатегория':'Новая категория',[text('name','Название')],{name:id?'':s.query||''},v=>commit('category.add',
+          d=>addCategory(d,{id:categoryId,name:v.name.trim(),type:'expense',parentId:id||null}),()=>{
+            stack.pop();
+            if(state().page==='form-subcategory-parent')stack.pop();
+            return action('form-category-select',categoryId);
+          }));
+      }
       case 'form-account': return enter('form-accounts',{owner:s,options:s.fields.find(field=>field.key==='accountId').options,accountId:s.values.accountId});
       case 'form-account-select': s.accountId=id;remember();return redraw();
       case 'form-account-next': {
@@ -1179,9 +1207,15 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         s.accountPanel=s.accountPanel===panel?'':panel;remember();return redraw();
       }
       case 'account-panel-close': {
-        if(s.page==='goal-manage')return pop();
-        const panel=s.accountPanel;s.accountPanel='';remember();redraw();
-        return host.querySelector('[data-section-action="account-panel-'+panel+'"]')?.focus({preventScroll:true});
+        const node=host.querySelector('.fr-account-popover');
+        if(node?.dataset.closing)return;
+        if(node)node.dataset.closing='true';
+        return animatePopover(node,true).then(()=>{
+          if(state()!==s)return;
+          if(s.page==='goal-manage')return pop();
+          const panel=s.accountPanel;s.accountPanel='';remember();redraw();
+          host.querySelector('[data-section-action="account-panel-'+panel+'"]')?.focus({preventScroll:true});
+        });
       }
       case 'account-primary-picker': s.accountPanel='';return enter(name);
       case 'payment-refund': return refundForm(doc().operations.find(o=>o.id===s.id));
@@ -1493,9 +1527,19 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   host.addEventListener('contextmenu',event=>{
     if(state()?.page==='payments'&&event.target.closest('.fr-due-row'))event.preventDefault();
   });
+  function paymentCategoryRows(s){
+    return categoryRows(doc(),'expense',s.owner.values.categoryId,s.query)
+      .replaceAll('data-category=','data-section-action="form-category-select" data-id=')
+      .replaceAll('data-action="category-create-menu"','data-section-action="form-category-new"');
+  }
   host.addEventListener('input',event=>{
     if (!event.target.closest('[data-section-page]')||!state()) return;
     const input=event.target,s=state();
+    if(input.matches('[data-payment-category-search]')){
+      s.query=input.value;
+      host.querySelector('[data-payment-category-results]').innerHTML=paymentCategoryRows(s);
+      return;
+    }
     if (input.matches('[data-section-search]')) {
       s.query=input.value;
       host.querySelector('[data-section-results]').innerHTML=categoryResults(s);
@@ -1526,7 +1570,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       remember();redraw();return;
     }
     if ((s.dynamic==='account'&&['kind','mode'].includes(input.name))||(s.dynamic==='income'&&input.name==='repeat')){
-      remember();redraw();host.querySelector(`[name="${input.name}"]`)?.focus({preventScroll:true});
+      remember();redraw();host.querySelector(`[data-select-trigger="${input.name}"]`)?.focus({preventScroll:true});
     }
   });
   host.addEventListener('submit',event=>{
@@ -1536,6 +1580,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const s=state();
     try {
       if(s.fields.some(field=>field.type==='account-picker')&&(!s.values.accountId||draftReceiptAccount(s.values.accountId)!==s.values.accountId))fail('SELECTION');
+      if(s.fields.some(f=>f.type==='category-picker'&&!s.values[f.key])){s.error='Выберите категорию.';remember();return redraw();}
       s.save(s.values);
     } catch(error) {s.error=errors[error.code]||'Проверьте введённые данные.';remember();redraw();}
   });
@@ -1579,7 +1624,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       fitAccountContent();
       const popover=host.querySelector('.fr-account-popover');
       if(popover){
-        positionAccountPopover(state().accountPanel||'goal');
+        const key=state().accountPanel;
+        positionAccountPopover(key||'goal');
+        pressFeedback(host.querySelector(key?'[data-section-action="account-panel-'+key+'"]':'[data-section-action=goal-manage]'));
+        animatePopover(popover);
         const layer=popover.parentElement;
         for(const element of layer.parentElement.children)if(element!==layer)element.inert=true;
         (popover.querySelector('button')||popover).focus({preventScroll:true});
