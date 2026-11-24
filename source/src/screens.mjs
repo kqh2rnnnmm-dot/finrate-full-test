@@ -134,7 +134,7 @@ function reviewRow(field,label,value,mark,extra='',disabled=false){
   return `<button type="button" class="fr-review-row fr-editable-row ${extra}" data-edit="${field}" aria-label="${label}" ${disabled?'disabled':''}><span class="fr-row-text">${value}</span>${icon(mark)}</button>`;
 }
 
-export function review(doc,draft,previous,dirty,error,busy,overspent='',archived=false) {
+export function review(doc,draft,previous,dirty,error,busy,overspent='',archived=false,refundable=false) {
   const {name,parent}=categoryLabel(doc,draft.categoryId),account=doc.accounts.find(a=>a.id===draft.accountId);
   const readonly=archived||previous?.cancelled;
   return heading(labels[draft.kind],draft.kind)+`<div class="fr-review-body"><div class="fr-review-card">
@@ -144,7 +144,7 @@ ${reviewRow('date','Изменить дату',esc(dateText(draft.date)),'calend
 ${draft.creditDueDate?reviewRow('credit-date','Изменить срок погашения',esc(dateText(draft.creditDueDate)),'calendar','',readonly):''}
 ${reviewRow('account','Выбрать счёт операции',account?esc(account.name)+`<span class="fr-selected-account-type">${accountMark(account)}</span>`:'Выбрать счёт','account','fr-account',readonly)}
 <button type="button" class="fr-review-row fr-editable-row fr-note-link" data-edit="note">${draft.note?'Заметка<span class="fr-note-present" aria-hidden="true"></span>':'Добавить заметку'}</button>
-</div>${previous?`<div class="fr-operation-actions"><button type="button" class="fr-history-link" data-action="history">История изменений</button>${previous.cancelled?'<p class="fr-no-operations">Операция отменена</p>':archived?'<p class="fr-no-operations">Счёт в архиве</p>':'<button type="button" class="fr-cancel-link" data-action="cancel">Отменить операцию</button>'}</div>`:''}<p class="fr-create-error" role="alert">${esc(error)}</p></div>`+
+</div>${previous?`<div class="fr-operation-actions">${refundable&&!readonly?'<button type="button" class="fr-history-link" data-action="refund">Записать возврат</button>':''}<button type="button" class="fr-history-link" data-action="history">История изменений</button>${previous.cancelled?'<p class="fr-no-operations">Операция отменена</p>':archived?'<p class="fr-no-operations">Счёт в архиве</p>':'<button type="button" class="fr-cancel-link" data-action="cancel">Отменить операцию</button>'}</div>`:''}<p class="fr-create-error" role="alert">${esc(error)}</p></div>`+
   (previous?.cancelled||archived?'':primary('Сохранить','save',busy||previous&&!dirty?'disabled':''));
 }
 
@@ -168,7 +168,7 @@ export function operationRows(doc,rows,query=''){
     day=o.date;
     const accountPath=destination?[account,destination].filter(Boolean).join(' → '):account;
     return group+`<button type="button" class="fr-operation-row ${o.cancelled?'fr-cancelled':o.kind}" data-operation="${esc(o.id)}">
-      <span class="fr-operation-name">${type}</span><span class="fr-operation-amount">${o.kind==='income'?'+':o.kind==='expense'?'−':''}${amountText(o.amount)}</span>
+      <span class="fr-operation-name">${type}</span><span class="fr-operation-amount">${['income','refund'].includes(o.kind)?'+':o.kind==='expense'?'−':''}${amountText(o.amount)}</span>
       ${categoryName?`<span class="fr-operation-category">${esc(categoryName)}</span>`:''}
       ${accountPath?`<span class="fr-operation-account">${esc(accountPath)}</span>`:''}
       ${o.cancelled?'<span class="fr-operation-status">Операция отменена</span>':''}</button>`;

@@ -33,7 +33,7 @@ export function saveOperation(d,input,{editId=null,editBase=null,draftId=null,fe
   return apply(d,n=>{
     checkSplit(n,input);
     if(!editId&&input.id){const prior=n.operations.find(o=>o.id===input.id);if(prior&&input.kind!=='transfer'){
-      const keys=['kind','date','accountId','amount','referenceId','refundChoice','refundToAccountId','refundTransferConfirmed'];const parts=copy(input.allocations||[]),allocated=parts.reduce((sum,x)=>addSafe(sum,x.amount),0);if(allocated<input.amount){const rest=parts.find(x=>x.categoryId===null);if(rest)rest.amount+=input.amount-allocated;else parts.push({categoryId:null,amount:input.amount-allocated});}
+      const keys=['kind','date','accountId','amount','referenceId','refundChoice','refundToAccountId','refundTransferConfirmed','creditFunding','creditRepayMonth'];const parts=copy(input.allocations||[]),allocated=parts.reduce((sum,x)=>addSafe(sum,x.amount),0);if(allocated<input.amount){const rest=parts.find(x=>x.categoryId===null);if(rest)rest.amount+=input.amount-allocated;else parts.push({categoryId:null,amount:input.amount-allocated});}
       if(keys.every(k=>(prior[k]??null)===(input[k]??null))&&JSON.stringify(prior.allocations)===JSON.stringify(parts)&&(!input.creditDueDate||input.creditDueDate===prior.creditDueDate)&&prior.note===(input.note||''))return false;fail('DUPLICATE');
     }}
 
@@ -52,7 +52,7 @@ export function saveOperation(d,input,{editId=null,editBase=null,draftId=null,fe
         Object.assign(o,{stage,debitDate:stage==='waiting'?null:input.date,creditDate:stage==='received'?(wasImmediate?input.date:old.creditDate):null,returnDate:null,feeMode,enteredAmount:input.amount});
         if(fee){if(oldFee)n.operations=n.operations.filter(x=>x.id!==oldFee.id);post(n,{id:oldFee?.id||editId+'-fee',kind:'expense',date:input.date,accountId:input.accountId,amount:fee,allocations:[{categoryId:feeCategoryId,amount:fee}],referenceId:editId,note:'Комиссия перевода',creditDueDate:input.creditDueDate});n.operations.at(-1).pending=stage==='waiting';}
         else if(oldFee){oldFee.cancelled=true;oldFee.pending=false;}
-      }else post(n,{...input,id:editId,sequence:old.sequence,creditDueDate:input.creditDueDate||old.creditDueDate});
+      }else post(n,{...input,id:editId,sequence:old.sequence,creditDueDate:input.creditDueDate??old.creditDueDate});
     }else if(input.kind==='transfer'){
       if(!Number.isSafeInteger(fee)||fee<0||!['extra','inside'].includes(feeMode))fail('AMOUNT');
       const amount=feeMode==='inside'?input.amount-fee:input.amount;if(amount<=0)fail('AMOUNT');

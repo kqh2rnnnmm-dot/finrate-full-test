@@ -38,13 +38,14 @@ export function addAccount(d,{name,kind='bank',opening=0,id=uid(),financeType='d
   if(financeType==='debit'&&opening<0)fail('INSUFFICIENT_FUNDS');
   if(financeType==='credit'&&opening < -credit.limit)fail('CREDIT_LIMIT');
   if(financeType==='credit'&&opening<0&&!credit.openingLots)fail('CREDIT_DUE');
-  if(financeType==='credit'&&credit.openingLots&&credit.openingLots.reduce((sum,lot)=>addSafe(sum,lot.amount),0)!==Math.max(0,-opening))fail('CREDIT_DUE');
+  if(financeType==='credit'&&credit.openingLots&&credit.openingLots.reduce((sum,lot)=>addSafe(sum,lot.amount),0)!==((credit.openingOwn??Math.max(0,opening))-opening))fail('CREDIT_DUE');
   d.accounts.push({id,name:name.trim(),kind,opening,archived:false,financeType,...(financeType==='credit'?{credit:copy(credit)}:{})});return id;
 }
 function validateCredit(c){
  if(!c||!Number.isSafeInteger(c.limit)||c.limit<=0||!c.grace||!['months','days','statement'].includes(c.grace.mode))fail('CREDIT_SETTINGS');
  if(c.grace.mode==='months'&&(!Number.isInteger(c.grace.months)||c.grace.months<1||c.grace.months>12))fail('CREDIT_SETTINGS');
  if(c.grace.mode==='days'&&(!Number.isInteger(c.grace.days)||c.grace.days<1||c.grace.days>365))fail('CREDIT_SETTINGS');
+ if(c.openingOwn!==undefined&&(!Number.isSafeInteger(c.openingOwn)||c.openingOwn<0||!c.openingLots))fail('CREDIT_SETTINGS');
  if(c.openingLots!==undefined){if(!Array.isArray(c.openingLots)||c.openingLots.length>100)fail('CREDIT_SETTINGS');for(const lot of c.openingLots){integer(lot.amount);date(lot.due);if(lot.amount<=0)fail('CREDIT_SETTINGS');if(lot.month!==undefined&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(lot.month))fail('CREDIT_SETTINGS');}}
  if(c.statement){date(c.statement.dueDate);integer(c.statement.amount);integer(c.statement.paymentsAtSet);if(c.statement.amount<0||c.statement.paymentsAtSet<0)fail('CREDIT_SETTINGS');}
 }
@@ -59,7 +60,7 @@ export function rename(d,collection,id,name){text(name);const item=d[collection]
   if(d[collection].some(x=>x.id!==id&&normalized(x.name)===normalized(name)&&(collection==='accounts'||(x.type===item.type&&x.parentId===item.parentId))))fail('NAME_EXISTS');item.name=name.trim();
 }
 export function archive(d,collection,id){if(!['accounts','categories'].includes(collection))fail('SCHEMA');const item=d[collection].find(x=>x.id===id);if(!item)fail('NOT_FOUND');
-  if(collection==='accounts'&&balances(d)[id]!==0)fail('NONZERO_ACCOUNT');
+  if(collection==='accounts'&&(balances(d)[id]!==0||creditLedger(d).get(id)?.debt))fail('NONZERO_ACCOUNT');
   if(collection==='accounts'&&d.schema>=3&&d.accounts.filter(a=>!a.archived).length<=1)fail('LAST_ACCOUNT');
   if(collection==='accounts'&&d.operations.some(o=>o.kind==='transfer'&&!o.cancelled&&['waiting','debited'].includes(o.stage)&&(o.accountId===id||o.toAccountId===id)))fail('PENDING_ACCOUNT');
   item.archived=true;
@@ -80,6 +81,10 @@ export function postings(op){
 }
 function validateOperation(d,o,historical=false){
   if(o.creditDueDate!==undefined)date(o.creditDueDate);
+  const creditSource=d.accounts.find(a=>a.id===o.accountId)?.financeType==='credit';
+  if(o.creditFunding!==undefined&&(!creditSource||!({purchase:'expense',own:'transfer',refund:'refund'}[o.creditFunding]===o.kind)))fail('CREDIT_SETTINGS');
+  if(o.creditRepayMonth!==undefined&&(o.kind!=='transfer'||d.accounts.find(a=>a.id===o.toAccountId)?.financeType!=='credit'||!/^\d{4}-(0[1-9]|1[0-2])$/.test(o.creditRepayMonth)))fail('CREDIT_DUE');
+  if(o.creditFunding==='purchase'&&o.creditDueDate&&o.creditDueDate<o.date)fail('CREDIT_DUE');
   if(o.sequence!==undefined){integer(o.sequence);if(o.sequence<1)fail('SCHEMA');}
   if(o.refundTransferConfirmed!==undefined&&typeof o.refundTransferConfirmed!=='boolean')fail('REFUND');
   if(o.refundChoice!==undefined&&(!['keep','withdraw'].includes(o.refundChoice)||o.kind!=='refund'))fail('REFUND');
@@ -91,12 +96,12 @@ function validateOperation(d,o,historical=false){
   const external=o.kind==='transfer'&&o.transferTarget==='external';
   if(o.transferTarget!==undefined&&(!['own','external'].includes(o.transferTarget)||o.kind!=='transfer'))fail('TRANSFER');
   if(external){if(d.schema<4||o.toAccountId!==null)fail('TRANSFER');text(o.recipient);if(o.stage&&o.stage!=='received')fail('TRANSFER');}
-  else if(o.kind==='transfer'){const target=d.accounts.find(a=>a.id===o.toAccountId);if(!target||target.id===account.id||(!historical&&target.archived))fail('TRANSFER');}
+  else if(o.kind==='transfer'){const target=d.accounts.find(a=>a.id===o.toAccountId);if(!target||(target.id===account.id&&(o.creditFunding!=='own'||(o.stage&&o.stage!=='received')))||(!historical&&target.archived))fail('TRANSFER');}
   if(o.balanceSnapshot){const s=o.balanceSnapshot;for(const key of ['fromBefore','fromAfter'])integer(s[key]);for(const key of ['toBefore','toAfter'])if(s[key]!==null)integer(s[key]);}
   if(!Array.isArray(o.allocations)||o.allocations.length>100)fail('ALLOCATIONS');
   if(['expense','income','refund'].includes(o.kind)||external){
     if(!o.allocations.length)fail('ALLOCATIONS');let total=0;const seen=new Set();
-    for(const x of o.allocations){const c=d.categories.find(c=>c.id===x.categoryId),uncategorized=d.schema>=3&&x.categoryId===null;if(!uncategorized&&(!c||c.type!==(o.kind==='income'?'income':'expense')||(!historical&&(c.archived||c.parentId&&d.categories.find(p=>p.id===c.parentId)?.archived)))||seen.has(x.categoryId))fail('CATEGORY');seen.add(x.categoryId);integer(x.amount);if(x.amount<=0)fail('AMOUNT');total=addSafe(total,x.amount);}
+    for(const x of o.allocations){const c=d.categories.find(c=>c.id===x.categoryId),uncategorized=d.schema>=3&&x.categoryId===null;if(!uncategorized&&(!c||c.type!==(o.kind==='income'?'income':'expense')||(!historical&&o.kind!=='refund'&&(c.archived||c.parentId&&d.categories.find(p=>p.id===c.parentId)?.archived)))||seen.has(x.categoryId))fail('CATEGORY');seen.add(x.categoryId);integer(x.amount);if(x.amount<=0)fail('AMOUNT');total=addSafe(total,x.amount);}
     if(total!==o.amount)fail('SPLIT_SUM');
   }else if(o.allocations.length)fail('ALLOCATIONS');
   if(typeof o.note!=='string'||o.note.length>500)fail('SCHEMA');
@@ -117,14 +122,14 @@ export function post(d,input){
     if(allocated>op.amount)fail('SPLIT_SUM');
     if(allocated<op.amount){const rest=op.allocations.find(x=>x.categoryId===null);if(rest)rest.amount=addSafe(rest.amount,op.amount-allocated);else op.allocations.push({categoryId:null,amount:op.amount-allocated});}
   }
-  for(const k of ['sequence','refundChoice','refundToAccountId','refundTransferConfirmed'])if(input[k]!==undefined)op[k]=input[k];
+  for(const k of ['sequence','refundChoice','refundToAccountId','refundTransferConfirmed','creditFunding','creditRepayMonth'])if(input[k]!==undefined)op[k]=input[k];
   if(d.schema>=5){
     op.sequence??=d.operations.reduce((n,o,i)=>Math.max(n,o.sequence||i+1),0)+1;
     const account=d.accounts.find(a=>a.id===op.accountId);
     if(account?.financeType==='credit'&&!op.creditDueDate&&op.kind==='expense'&&!op.referenceId){const g=account.credit.grace;op.creditDueDate=g.mode==='months'?dueForMonth(op.date,g.months):g.mode==='days'?dueAfterDays(op.date,g.days):undefined;if(!op.creditDueDate)delete op.creditDueDate;}
     if(op.kind==='refund'&&account?.financeType==='credit'){
       const before={...d,operations:d.operations.filter(o=>(o.date<op.date||o.date===op.date&&(o.sequence||0)<op.sequence)&&o.id!==op.id)};
-      const debt=Math.max(0,-(creditLedger(before).get(op.accountId)?.balance||0)),surplus=Math.max(0,op.amount-debt);
+      const debt=(creditLedger(before).get(op.accountId)?.debt||0),surplus=Math.max(0,op.amount-debt);
       if(surplus&&!['keep','withdraw'].includes(op.refundChoice))fail('REFUND_CHOICE');
       if(op.refundChoice==='withdraw'){
         if(!op.refundTransferConfirmed)fail('REFUND_CONFIRM');
@@ -138,7 +143,7 @@ export function post(d,input){
 }
 export function balances(d){const result=Object.fromEntries(d.accounts.map(a=>[a.id,a.opening]));for(const o of d.operations)for(const [id,n] of postings(o)){if(!Object.hasOwn(result,id))fail('ACCOUNT');result[id]=addSafe(result[id],n);}Object.values(result).reduce(addSafe,0);return result;}
 export function totals(d,{from='0000-01-01',to='9999-12-31'}={}){
-  const b=balances(d);let income=0,expense=0,adjustment=0;const byCategory=Object.create(null);
+  const b=balances(d),credit=d.schema>=5?creditLedger(d):null;let income=0,expense=0,adjustment=0;const byCategory=Object.create(null);
   for(const o of d.operations){if(o.date<from||o.date>to)continue;
     if(o.cancelled||o.pending)continue;
     if(o.kind==='income')income=addSafe(income,o.amount);
@@ -148,7 +153,7 @@ export function totals(d,{from='0000-01-01',to='9999-12-31'}={}){
     for(const x of o.allocations)byCategory[x.categoryId]=addSafe(byCategory[x.categoryId]||0,o.kind==='refund'?-x.amount:x.amount);
   }
   const inTransit=d.operations.filter(o=>o.kind==='transfer'&&o.stage==='debited'&&!o.cancelled).reduce((s,o)=>addSafe(s,o.amount),0);
-  return {balances:b,total:d.schema>=5?d.accounts.reduce((sum,a)=>addSafe(sum,a.financeType==='credit'?Math.max(0,b[a.id]):b[a.id]),0):Object.values(b).reduce(addSafe,0),income,expense,result:addSafe(income,-expense),adjustment,byCategory,inTransit};
+  return {balances:b,total:d.schema>=5?d.accounts.reduce((sum,a)=>addSafe(sum,a.financeType==='credit'?credit.get(a.id).own:b[a.id]),0):Object.values(b).reduce(addSafe,0),income,expense,result:addSafe(income,-expense),adjustment,byCategory,inTransit};
 }
 // Pure calculation seam for package 3. No planning UI or background actions.
 export function available(actual,reserves=[],obligations=[],horizon='9999-12-31'){
@@ -160,7 +165,7 @@ export function available(actual,reserves=[],obligations=[],horizon='9999-12-31'
 export function validateDocument(d){
   if(!d||![1,2,3,4,SCHEMA].includes(d.schema)||!currencies.has(d.currency))fail('SCHEMA');text(d.datasetId);stamp(d.createdAt);stamp(d.updatedAt);integer(d.revision);if(d.revision<0)fail('SCHEMA');
   for(const [k,limit] of [['accounts',200],['categories',2000],['operations',20000],['events',30000]]){if(!Array.isArray(d[k])||d[k].length>limit)fail('SIZE');unique(d[k]);}
-  const names=new Set();for(const a of d.accounts){text(a.name);integer(a.opening);if(!['bank','cash','wallet'].includes(a.kind)||typeof a.archived!=='boolean')fail('SCHEMA');if(a.financeType!==undefined&&!['debit','credit'].includes(a.financeType))fail('ACCOUNT_KIND');if(a.financeType==='credit'){validateCredit(a.credit);if(a.credit.openingLots&&a.credit.openingLots.reduce((sum,lot)=>addSafe(sum,lot.amount),0)!==Math.max(0,-a.opening))fail('CREDIT_DUE');}const n=normalized(a.name);if(names.has(n))fail('NAME_EXISTS');names.add(n);}
+  const names=new Set();for(const a of d.accounts){text(a.name);integer(a.opening);if(!['bank','cash','wallet'].includes(a.kind)||typeof a.archived!=='boolean')fail('SCHEMA');if(a.financeType!==undefined&&!['debit','credit'].includes(a.financeType))fail('ACCOUNT_KIND');if(a.financeType==='credit'){validateCredit(a.credit);if(a.credit.openingLots&&a.credit.openingLots.reduce((sum,lot)=>addSafe(sum,lot.amount),0)!==((a.credit.openingOwn??Math.max(0,a.opening))-a.opening))fail('CREDIT_DUE');}const n=normalized(a.name);if(names.has(n))fail('NAME_EXISTS');names.add(n);}
   names.clear();for(const c of d.categories){text(c.name);if(!['expense','income'].includes(c.type)||typeof c.archived!=='boolean'||!(c.parentId===null||typeof c.parentId==='string'))fail('SCHEMA');if(c.parentId){const p=d.categories.find(x=>x.id===c.parentId);if(!p||p.parentId||p.type!==c.type)fail('CATEGORY_PARENT');}const n=c.type+'|'+c.parentId+'|'+normalized(c.name)+(c.mergedInto?'|merged:'+c.id:'');if(names.has(n))fail('NAME_EXISTS');names.add(n);}
   for(const o of d.operations){validateOperation(d,o,true);
     if(o.cancelled!==undefined&&typeof o.cancelled!=='boolean')fail('SCHEMA');

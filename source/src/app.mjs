@@ -1,3 +1,4 @@
+import {spendingRoom, isCredit} from './engine/credit.mjs';
 import {editAmount,normalizedAmount,validAmount} from './amount-pad.mjs';
 import {bindUpdate} from './update.mjs';
 import * as ledger from './ledger.mjs';
@@ -5,7 +6,7 @@ import {createSections} from './section-controller.mjs';
 import {recordHistory, recordRows, field} from './sections.mjs';
 import * as screen from './screens.mjs';
 import {categoryRoot as rootCategory, monthlyOverview,primaryAccount,expenseShortfall} from './engine/month-budget.mjs';
-import {localDate} from './engine/operations.mjs';
+import {localDate,refundRemaining} from './engine/operations.mjs';
 import {money,uid} from './engine/model.mjs';
 import {bindMenuGlyph,bindTrack} from './motion.mjs';
 
@@ -45,7 +46,7 @@ function selectRecord(id) {
   const item=doc().operations.find(o=>o.id===id);
   if(!item)return;
   if(route==='section')return sections.openRecord(id);
-  if(['transfer','adjustment'].includes(item.kind)||doc().payments?.links.some(l=>l.operationId===id)){
+  if(['transfer','adjustment','refund'].includes(item.kind)||doc().payments?.links.some(l=>l.operationId===id)){
     sectionParent=route;
     sectionScroll=listNode()?.scrollTop||0;
     return sections.openRecord(id);
@@ -71,7 +72,7 @@ function operationsScreen(){
 function filterScreen(){
   const all=['','Все'];
   const fields=[
-    {key:'kind',label:'Тип',options:[all,['expense','Расход'],['income','Доход'],['transfer','Перевод'],['adjustment','Корректировка']]},
+    {key:'kind',label:'Тип',options:[all,['expense','Расход'],['income','Доход'],['refund','Возврат'],['transfer','Перевод'],['adjustment','Корректировка']]},
     {key:'account',label:'Счёт',options:[all,...doc().accounts.map(a=>[a.id,a.name])]},
     {key:'from',label:'С даты',type:'date',required:false},
     {key:'to',label:'По дату',type:'date',required:false}
@@ -133,7 +134,8 @@ function openAccountSelection(){
 function selectedAccountWarning(){
   if(draft.kind!=='expense'||!accountChoice)return {};
   const d=doc(),account=d.accounts.find(a=>a.id===accountChoice&&!a.archived), balances=ledger.fact().balances;
-  const shortfall=expenseShortfall(account,balances[accountChoice],money(draft.amount),previous);
+  const shortfall=isCredit(account)?Math.max(0,money(draft.amount)-spendingRoom(previous?.accountId===accountChoice?
+    {...d,operations:d.operations.filter(o=>o.id!==previous.id)}:d,accountChoice)):expenseShortfall(account,balances[accountChoice],money(draft.amount),previous);
   const transfer=shortfall>0&&account?.financeType!=='credit'&&d.accounts.some(a=>!a.archived&&a.financeType!=='credit'&&
     a.id!==accountChoice&&balances[a.id]>0);
   return {shortfall,transfer};
@@ -224,6 +226,8 @@ async function save(){
   }
   catch(cause){
     error={
+      REFUND_LINKED:'Сначала отмените связанный возврат.',
+      CREDIT_DUE:'Проверьте срок погашения. Он не может быть раньше даты покупки.',
       CREDIT_LIMIT:'На выбранном счёте недостаточно средств.',
       INSUFFICIENT_FUNDS:'На выбранном счёте недостаточно средств.',
       STALE:'Данные изменились в другой вкладке. Откройте приложение заново.',
@@ -311,6 +315,9 @@ function action(id){
       dialog.onclick=event=>{if(event.target===dialog){event.stopPropagation();dialog.close();}};
       dialog.addEventListener('close',()=>trigger.blur(),{once:true});
       dialog.showModal();
+      const anchor=trigger.getBoundingClientRect(), width=dialog.offsetWidth;
+      dialog.style.top=(anchor.bottom+6)+'px';
+      dialog.style.left=Math.max(12,Math.min(anchor.right-width,document.documentElement.clientWidth-width-12))+'px';
       return;
     }
     case 'first-account':
@@ -319,6 +326,11 @@ function action(id){
         exit:()=>move('account'),
         created:id=>{accountChoice=id;move('account');}
       });
+    case 'refund': {
+      if(isDirty()){error='Сначала сохраните изменения расхода.';return render();}
+      const scroll=host.querySelector('.fr-review-body')?.scrollTop||0;
+      return sections.refundForm(previous,()=>{move('review');host.querySelector('.fr-review-body').scrollTop=scroll;});
+    }
     case 'next':
       if(!validAmount(buffer))return;
       draft.amount=normalizedAmount(buffer);
@@ -367,7 +379,8 @@ function render(){
         .filter(a=>rootCategory(doc(),a.categoryId)===rootId).reduce((sum,a)=>sum+a.amount,0):0;
       const over=category&&category.spent-alreadyCounted+money(draft.amount)>category.plan;
       markup=screen.review(doc(),draft,previous,isDirty(),error,busy,over?category.name:'',
-        doc().accounts.some(a=>a.id===previous?.accountId&&a.archived));
+        doc().accounts.some(a=>a.id===previous?.accountId&&a.archived),
+        previous?.kind==='expense'&&!previous.cancelled&&!previous.referenceId&&refundRemaining(doc(),previous.id).some(x=>x.amount>0));
       break;
     }
     case 'note': markup=screen.noteScreen(note,previous?.cancelled||doc().accounts.some(a=>a.id===previous?.accountId&&a.archived));break;
