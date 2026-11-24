@@ -8,7 +8,7 @@ import {chromium} from 'playwright';
 import binary from '@sparticuz/chromium';
 import {scope,serveFixture,fixture} from './fixture-server.mjs';
 
-const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819',previous:'0a0fd28c7db8f2e50361b34ff4776f5a2d210cc6'};
+const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819',previous:'0a0fd28c7db8f2e50361b34ff4776f5a2d210cc6',test12:'092cc14f4bff8124bf6b1110de4002707bb88250'};
 const work=await mkdtemp(join(tmpdir(),'finrate-update-'));
 const results=process.env.FINRATE_UPDATE_SCREENSHOTS || 'verification/visual-patch';
 const readBuild=async path=>JSON.parse((await readFile(join(path,'sw.js'),'utf8')).match(/const build = (.*);/)[1]);
@@ -241,6 +241,36 @@ try{
   assert.deepEqual(await fixture(goalsPage,url),oldGoals);
   await upgradeGoals.close();
   console.log('PASS published 0a0fd28: closed goals from test.3 open after manual update, with original snapshots');
+
+  served='test12';
+  const upgradeCredit=await browser.newContext(options);
+  const creditPage=await upgradeCredit.newPage();
+  await creditPage.clock.setFixedTime(new Date('2026-11-25T12:00:00Z'));
+  const priorCredit=await fixture(creditPage,url,'visual');
+  await creditPage.goto(url);
+  await ready(creditPage);
+  assert.equal(await root(creditPage).getAttribute('data-release'),'0.2.0-test.12');
+  served='A';
+  await update(creditPage);
+  await creditPage.getByText('Доступна версия '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
+  await button(creditPage,'Обновить').click();
+  await creditPage.getByText('Обновлено до '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
+  await coherent(creditPage,A);
+  assert.deepEqual(await fixture(creditPage,url),priorCredit);
+  await creditPage.goto(url);
+  await button(creditPage,'Сводка').click();
+  await button(creditPage,'Ещё').click();
+  await creditPage.locator('[data-section-action=summary-accounts]').click();
+  for(const [id,amount] of [['sample-credit','100 000'],['sample-zero','50 000']]){
+    const card=creditPage.locator(`[data-section-action=account][data-id=${id}]`);
+    const shown=await card.locator('.np-money').innerText();
+    assert.equal(shown.replace(/\s/g,' '),amount+' ₽');
+    await card.click();
+    assert.equal(await creditPage.locator('.fr-account-total .np-money').innerText(),shown);
+    await button(creditPage,'Назад').click();
+  }
+  await upgradeCredit.close();
+  console.log('PASS test.12 upgrade: balances, credit limits, debt and own funds are preserved');
 
   for(const ownData of [false,true]){
     served='legacy';

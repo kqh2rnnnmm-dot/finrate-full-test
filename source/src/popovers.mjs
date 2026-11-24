@@ -1,3 +1,5 @@
+import {selectionMark} from './screens.mjs';
+
 const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function animatePopover(panel,closing=false){
   if(!panel||reducedMotion())return Promise.resolve();
@@ -57,7 +59,10 @@ export function bindSelectPopovers(host){
     for(const option of options){
       const button=document.createElement('button');
       button.type='button';
-      button.textContent=option.textContent;
+      const label=document.createElement('span');
+      label.textContent=option.textContent;
+      button.append(label);
+      button.insertAdjacentHTML('beforeend',selectionMark(option.selected));
       button.setAttribute('aria-pressed',String(option.selected));
       button.onclick=()=>close(option);
       panel.append(button);
