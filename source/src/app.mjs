@@ -93,13 +93,14 @@ function filterScreen(){
 function filterCategories(){
   const q=filterQuery.trim().toLocaleLowerCase('ru');
   const options=(c,child=false)=>`<button type="button" class="fr-operation-picker-choice ${child?'fr-operation-picker-child':''}"
-    data-filter-id="${screen.esc(c.id)}" aria-pressed="${c.id===pendingFilters.category}">${screen.esc(c.name)}</button>`;
+    data-filter-id="${screen.esc(c.id)}" aria-pressed="${c.id===pendingFilters.category}">${screen.esc(c.name)}${screen.selectionMark(c.id===pendingFilters.category)}</button>`;
   return ['expense','income'].filter(kind=>!pendingFilters.kind||kind===pendingFilters.kind).map(kind=>{
     const categories=doc().categories.filter(c=>c.type===kind);
     return categories.filter(c=>!c.parentId).map(c=>{
       const parentMatch=c.name.toLocaleLowerCase('ru').includes(q);
       const children=categories.filter(child=>child.parentId===c.id&&(parentMatch||child.name.toLocaleLowerCase('ru').includes(q)));
-      return parentMatch||children.length?options(c)+children.map(c=>options(c,true)).join(''):'';
+      return parentMatch||children.length?`<section class="fr-filter-category-group">${options(c)}${children.length?
+        `<div class="fr-filter-subcategories">${children.map(c=>options(c,true)).join('')}</div>`:''}</section>`:'';
     }).join('');
   }).join('')||'<p class="fr-no-operations">Категории не найдены.</p>';
 }
@@ -355,7 +356,7 @@ function action(id){
     }
     case 'new-category': case 'new-subcategory':
       categoryForm={sub:id==='new-subcategory',name:query.trim(),initial:'',parentId:categoryRoot,error:''};
-      showCreate=false;return move('category-new');
+      return move('category-new');
     case 'save-category': return void createCategory();
     case 'stay': return back();
     case 'discard': {const discard=leave.onDiscard;leave=null;return discard();}
@@ -402,7 +403,7 @@ function render(){
       markup=screen.heading('Категория')+
         `<div class="fr-payment-actions-search"><input type="search" data-filter-search aria-label="Поиск категории" placeholder="Поиск"
         value="${screen.esc(filterQuery)}"></div><div class="fr-payment-actions-list">
-        <button type="button" class="fr-operation-picker-choice" data-filter-id="">Все категории</button>
+        <button type="button" class="fr-operation-picker-choice" data-filter-id="" aria-pressed="${!pendingFilters.category}">Все категории${screen.selectionMark(!pendingFilters.category)}</button>
         <div data-filter-results>${filterCategories()}</div></div>`;
       break;
     case 'section': markup=sections.render();break;

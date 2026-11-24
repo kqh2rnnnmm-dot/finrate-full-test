@@ -2,7 +2,7 @@ import {animatePopover,pressFeedback} from './popovers.mjs';
 import {editAmount,normalizedAmount,validAmount} from './amount-pad.mjs';
 import * as ledger from './ledger.mjs';
 import * as ui from './sections.mjs';
-import {heading, esc, amountText, dateText, recentOperationRows, operationRows, categoryRows, accountMark, categoryLabel, keypad, enteredMoney, icon, unsaved} from './screens.mjs';
+import {heading, esc, amountText, dateText, recentOperationRows, operationRows, categoryRows, accountMark, categoryLabel, keypad, enteredMoney, icon, unsaved, accountChoices, selectionMark} from './screens.mjs';
 import {addAccount, addCategory, archive, money, rename, uid, fail, postings, addSafe} from './engine/model.mjs';
 import {saveOperation, cancelOperation, localDate, refundRemaining} from './engine/operations.mjs';
 import {reconcileAccount, restoreAccount, categoryAction, setAccountPolicy, transferPreview} from './engine/block02.mjs';
@@ -464,23 +464,28 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     const account=currentAccount(preferred);
     return account&&!account.archived&&!isCredit(account)?preferred:budget.primaryAccount(doc())?.id;
   }
-  function receipt(row, review=false) {
-    const id = uid();
-    const receiptEntry=(d,v,final)=>income.confirmPlannedIncome(d,row.id,{
-      ...amountEntry(id,'income',v,row.categoryId),today:date()
-    },{final});
-    const save = (v,final,nested=false) => {
-      if(!review)return commit('income.receipt',d=>receiptEntry(d,v,final),nested?()=>{stack.pop();pop();}:pop);
-      return enter('income-review',{row,values:v,final,save:()=>commit('income.receipt',d=>receiptEntry(d,v,final),()=>{
-        stack=[];exit();
+  function receipt(row, fromHome=false) {
+    const id=uid();
+    let accountId=draftReceiptAccount(row.accountId);
+    const originDepth=stack.length;
+    const review=(values,final)=>enter('income-review',{row,values,save:()=>commit('income.receipt',d=>
+      income.confirmPlannedIncome(d,row.id,{...amountEntry(id,'income',values,row.categoryId),today:date()},{final}),()=>{
+        if(fromHome){stack=[];exit();return;}
+        stack.length=originDepth;
+        redraw();
       })});
-    };
-    form('Записать поступление',[number('amount','Получено'),day('date','Дата'),receiptAccounts()],
-      {amount:numeric(row.remaining),date:date(),accountId:draftReceiptAccount(row.accountId)},
-      v=>{
-        if(asAmount(v.amount)>=row.remaining)return save(v,false);
-        enter('income-completion',{row,received:asAmount(v.amount),onChoice:final=>save(v,final,true)});
-      },{submitLabel:'Далее'});
+    const fields=[{...number('amount','Сумма'),hideLabel:true,placeholder:'Введите сумму'},
+      {...day('date','Дата'),hideLabel:true}];
+    form('Записать поступление',fields,{amount:numeric(row.remaining),date:date()},values=>{
+      const received=asAmount(values.amount);
+      if(!values.date||values.date>date())fail('PLANNING');
+      enter('receipt-account',{accountId,accept:id=>{
+        accountId=id;
+        const draft={...values,accountId};
+        if(received>=row.remaining)return review(draft,false);
+        return enter('income-completion',{row,received,onChoice:final=>review(draft,final)});
+      }});
+    },{submitLabel:'Далее'});
   }
 
   function paymentForm(plan=null,occurrence=null) {
@@ -554,9 +559,9 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   function renderAccount(s,a,credit,d) {
     const rows=accountOperations(d,a.id);
     const recent=[...rows].reverse().sort((left,right)=>right.date.localeCompare(left.date)).slice(0,5);
-    const amount=credit?credit.debt:ledger.fact().balances[a.id];
+    const amount=credit?credit.available:ledger.fact().balances[a.id];
     const statement=ui.actionButton('Указать сумму по выписке','credit-statement');
-    const tabs=credit?ui.tabs([['due','Беспроцентный период'],['history','Операции']],s.tab||'due'):'';
+    const tabs=credit?ui.tabs([['due','Беспроцентный\nпериод'],['history','Операции']],s.tab||'due'):'';
     let received=0,spent=0;
     if(!credit)for(const op of rows){
       for(const [id,n] of postings(op)){
@@ -565,16 +570,16 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         if(n>0)received=addSafe(received,n);else spent=addSafe(spent,-n);
       }
     }
-    const history=ui.link('История счёта','account-history',a.id);
-    const more=credit?ui.panel(ui.pair('Кредитный лимит',credit.limit)+ui.pair('Можно потратить с карты',credit.available)+ui.pair('Свои деньги на карте',credit.own))+
+    const history=ui.actionButton('История счёта','account-history',a.id);
+    const more=credit?ui.panel(ui.pair('Кредитный лимит',credit.limit)+ui.pair('Общий долг',credit.debt)+ui.pair('Свои деньги на карте',credit.own))+
       history+(!a.archived&&credit.own?ui.actionButton('Перевести свои деньги','account-transfer'):''):
       ui.panel(ui.small('Движение за '+monthLabel(todayMonth()))+ui.pair('Поступило',received)+ui.pair('Списано',spent))+history;
     const actions=a.archived?ui.actionButton('Восстановить счёт','account-restore'):
       (credit?ui.actionButton('Записать покупку','credit-purchase')+ui.actionButton('Условия кредитной карты','credit-settings')+
         ui.actionButton('Долги при настройке','credit-opening')+statement:ui.actionButton('Скорректировать остаток','account-reconcile'))+
       ui.actionButton('Переименовать','account-rename')+ui.actionButton('Архивировать','account-archive');
-    const info=credit?'Вся непогашенная задолженность по кредитной карте.':'Текущий остаток на счёте с учётом записанных операций.';
-    const body=ui.body('<div class="fr-account-total">'+ui.moneyLabel(amount)+
+    const info=credit?'Кредитный лимит за вычетом всего долга. Свои деньги в эту сумму не входят.':'Текущий остаток на счёте с учётом записанных операций.';
+    const body=ui.body('<div class="fr-account-total'+(credit?' fr-credit-total':'')+'">'+(credit?ui.small('Можно потратить'):'')+ui.moneyLabel(amount)+
       '<button type="button" class="fr-account-info" data-section-action="account-panel-info" aria-label="О сумме" aria-expanded="'+(s.accountPanel==='info')+'">'+icon('info')+'</button></div>'+
       '<div class="fr-account-kind">'+accountMark(a)+(a.archived?ui.small('В архиве'):'')+'</div>'+tabs+
       (credit&&s.tab!=='history'?'<div class="fr-account-periods">'+(creditPeriods(credit)||ui.empty('Долга нет.'))+'</div>'+ui.actionButton('Все сроки','credit-periods'):
@@ -691,7 +696,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           validAmount(s.owner.values.amount.replace('.',','))?money(s.owner.values.amount):0,s.owner.paymentRecord):0;
         return list('Счёт',s.options.map(([id,label,mark])=>`<button type="button" class="fr-form-account"
           data-section-action="form-account-select" data-id="${esc(id)}" aria-pressed="${id===s.accountId}">
-          <span class="fr-form-account-copy"><strong>${esc(label)}</strong>${mark}</span>${id===s.accountId?icon('check'):''}</button>`).join('')+
+          <span class="fr-form-account-copy"><strong>${esc(label)}</strong>${mark}</span>${selectionMark(id===s.accountId)}</button>`).join('')+
           (shortfall?ui.empty('На этом счёте не хватает '+amountText(shortfall)+'. Выберите другой счёт.'):''))+
           `<button type="button" class="fr-primary" data-section-action="form-account-next" ${selected&&!shortfall?'':'disabled'}>Далее</button>`;
       }
@@ -771,7 +776,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         const rows=types.map(([name,match])=>{
           const accounts=d.accounts.filter(a=>a.archived===!active&&match(a));
           return accounts.length?`<section class="fr-account-section"><h2 class="fr-section-title">${name}</h2>${
-            accounts.map(a=>ui.accountCard(a,isCredit(a)?creditSummary(d,a.id,date()).debt:balances[a.id],a.id===budget.primaryAccount(d)?.id)).join('')}</section>`:'';
+            accounts.map(a=>ui.accountCard(a,isCredit(a)?creditSummary(d,a.id,date()).available:balances[a.id],a.id===budget.primaryAccount(d)?.id,isCredit(a)?'Можно потратить':'')).join('')}</section>`:'';
         }).join('');
         const menu=accountMenu('account-panel-actions',s.accountPanel==='actions','Настройки счетов');
         return heading('Счета и кошельки','',menu)+
@@ -788,8 +793,8 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'credit-periods': return list('Беспроцентный период',creditPeriods(creditSummary(d,s.id,date()))||ui.empty('Долга нет.'));
       case 'account-primary-picker': {
         const primary=budget.primaryAccount(d)?.id;
-        return list('Основной счёт',d.accounts.filter(a=>!a.archived&&!isCredit(a)).map(a=>
-          ui.link(a.name,'account-primary',a.id,a.id===primary?ui.small('Основной счёт'):'')).join('')||ui.empty('Нет доступных счетов.'));
+        return list('Основной счёт',(s.error?ui.empty(s.error):'')+(d.accounts.filter(a=>!a.archived&&!isCredit(a)).map(a=>
+          ui.choice(a.name,'account-primary',a.id,a.id===primary)).join('')||ui.empty('Нет доступных счетов.')));
       }
       case 'account-history': return list('История счёта',ui.small(accountName(s.id))+
         d.accountEdits.filter(r=>r.accountId===s.id).map((r,i,rows)=>{
@@ -810,7 +815,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         const x=s.owner.draft;
         const other=s.field==='accountId'?x.toAccountId:x.accountId;
         const candidates=d.accounts.filter(a=>!a.archived&&a.id!==other&&(!isCredit(a)||s.field==='accountId'&&a.id===s.owner.creditSource));
-        return list(s.field==='accountId'?'Откуда':'Куда',candidates.map(a=>ui.link(a.name,'transfer-pick',a.id,
+        return list(s.field==='accountId'?'Откуда':'Куда',candidates.map(a=>ui.choice(a.name,'transfer-pick',a.id,a.id===x[s.field],
           `<span class="fr-section-amount">${ui.moneyLabel(isCredit(a)?creditSummary(d,a.id,date()).own:ledger.fact().balances[a.id])}${accountMark(a)}</span>`)).join('')||ui.empty('Нет доступных счетов.'));
       }
       case 'transfer-review': {
@@ -863,11 +868,16 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           (next?ui.link('Следующее ожидание','income-show-month',next.date.slice(0,7),ui.small(next.name+' · '+dateText(next.date))):'')+
           (linking?'':ui.actionButton('Планы доходов','income-plans-manage')));
       }
+      case 'receipt-account': {
+        const accounts=accountChoices(d,ledger.fact().balances,s.accountId,'income',budget.primaryAccount(d)?.id,'receipt-account-select');
+        return list('Счёт',accounts||ui.empty('Нет доступных счетов.'))+
+          bottom(actionIsland('Далее','receipt-account-next',!s.accountId||draftReceiptAccount(s.accountId)!==s.accountId));
+      }
       case 'income-review': {
         const v=s.values;
         return list('Доход',ui.panel(ui.pair('Получено',asAmount(v.amount))+ui.small(s.row.name)+
           ui.small(dateText(v.date))+ui.small(accountName(v.accountId)))+
-          (s.error?ui.empty(s.error):'')+ui.actionButton('Сохранить','income-review-save'));
+          (s.error?ui.empty(s.error):''))+bottom(actionIsland('Сохранить','income-review-save',busy));
       }
       case 'income-link-source':
         return list('Связать записанный доход',linkableIncome().map(o=>ui.link(categoryName(o.allocations[0]?.categoryId),
@@ -1012,7 +1022,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
         <button type="button" class="fr-category-fold" data-section-action="category-fold" data-id="${esc(c.id)}"
           aria-label="Подкатегории: ${esc(c.name)}" aria-expanded="${!!open}">${icon('down')}</button></div>
         ${open?`<div class="fr-category-children">${children.map(child=>ui.link(child.name,'category',child.id)).join('')}
-          ${ui.link('Добавить подкатегорию','category-add-child',c.id)}</div>`:''}</div>`;
+          ${ui.actionButton('Добавить подкатегорию','category-add-child',c.id)}</div>`:''}</div>`;
     }).join('')||(q?ui.link('Создать «'+s.query.trim()+'»','category-new'):ui.empty('Категорий пока нет.'));
 
   }
@@ -1080,7 +1090,6 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   function action(name,id='') {
     if (busy) return;
     const s=state();
-    if(s.accountPanel==='actions'&&!name.startsWith('account-panel-'))s.accountPanel='';
     switch (name) {
       case 'month': {
         const next=new Date(s.month+'-01T12:00:00Z');
@@ -1217,7 +1226,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
           host.querySelector('[data-section-action="account-panel-'+panel+'"]')?.focus({preventScroll:true});
         });
       }
-      case 'account-primary-picker': s.accountPanel='';return enter(name);
+      case 'account-primary-picker': return enter(name);
       case 'payment-refund': return refundForm(doc().operations.find(o=>o.id===s.id));
       case 'refund-original': return openExistingRecord(id);
       case 'refund-cancel': return confirm('Отменить возврат?','Остаток на счёте изменится.','Отменить возврат','operation.cancel',d=>cancelOperation(d,s.id));
@@ -1236,7 +1245,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       }
       case 'credit-periods': return enter(name,{id:s.id});
       case 'credit-opening': return openingDebtForm(currentAccount(s.id));
-      case 'account-primary': return commit('account.primary',d=>budget.setPrimaryAccount(d,id||s.id),()=>{if(id)pop();else redraw();});
+      case 'account-primary': return commit('account.primary',d=>budget.setPrimaryAccount(d,id||s.id),redraw);
       case 'account-new': return newAccount();
       case 'account-transfer': return transferForm(s.id);
       case 'account-rename': return form('Название счёта',[text('name','Название')],{name:accountName(s.id)},
@@ -1299,6 +1308,10 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       case 'income-plans-manage': return enter('income-plans',{month:todayMonth()});
       case 'income-show-month': s.month=id;s.scroll=0;return redraw();
       case 'income-due-pick': return receipt(incomeRow(id),true);
+      case 'receipt-account-select': s.accountId=id;remember();return redraw();
+      case 'receipt-account-next':
+        if(s.accountId&&draftReceiptAccount(s.accountId)===s.accountId)return s.accept(s.accountId);
+        return;
       case 'income-review-save': return s.save();
       case 'income-link-source': return enter(name);
       case 'income-link-source-pick': {

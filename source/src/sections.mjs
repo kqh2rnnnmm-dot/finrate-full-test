@@ -1,7 +1,9 @@
-import {accountCardContents, amountText, dateText, esc, heading, icon, monthHeader, primary, categoryLabel, operationRows, budgetBar} from './screens.mjs';
+import {accountCardContents, amountText, dateText, esc, heading, icon, monthHeader, primary, categoryLabel, operationRows, budgetBar, selectionMark} from './screens.mjs';
 
 export const link = (label, action, id='', detail='') =>
-  `<button type="button" class="np-link" data-section-action="${action}" data-id="${esc(id)}"><span><span class="fr-section-name" data-full-name>${esc(label)}</span>${detail}</span>${icon('next')}</button>`;
+  `<button type="button" class="np-link" data-section-action="${action}" data-id="${esc(id)}"><span><span class="fr-section-name">${esc(label)}</span>${detail}</span></button>`;
+export const choice = (label,action,id,selected,detail='') =>
+  `<button type="button" class="fr-selection-choice" data-section-action="${action}" data-id="${esc(id)}" aria-pressed="${selected}"><span>${esc(label)}${detail}</span>${selectionMark(selected)}</button>`;
 export {budgetBar};
 export const small = value => `<small class="fr-muted">${esc(value)}</small>`;
 export const moneyLabel = value => `<strong class="np-money">${amountText(value)}</strong>`;
@@ -11,26 +13,26 @@ export const body = content => `<div class="np-body" data-section-scroll>${conte
 export const empty = text => `<p class="fr-no-operations">${esc(text)}</p>`;
 export const plus = (action,label) => `<button class="fr-category-new" type="button" data-section-action="${action}" aria-label="${esc(label)}">${icon('plus')}</button>`;
 export const calendarIcon = () => icon('calendar');
-export const actionButton = (label,action) => `<button type="button" class="fr-section-secondary" data-section-action="${action}">${esc(label)}</button>`;
-export const tabs = (items,current) => `<div class="fr-section-tabs">${items.map(([id,label])=>`<button type="button" data-section-action="tab" data-id="${id}" aria-pressed="${id===current}">${esc(label)}</button>`).join('')}</div>`;
+export const actionButton = (label,action,id='') => `<button type="button" class="fr-section-secondary" data-section-action="${action}" data-id="${esc(id)}">${esc(label)}</button>`;
+export const tabs = (items,current) => `<div class="fr-section-tabs">${items.map(([id,label])=>`<button type="button" data-section-action="tab" data-id="${id}" aria-pressed="${id===current}">${esc(label).replaceAll('\n','<br>')}</button>`).join('')}</div>`;
 const decimal = value => String(value ?? '').replace('.',',');
 const option = (value,label,selected) => `<option value="${esc(value)}" ${String(selected)===String(value)?'selected':''}>${esc(label)}</option>`;
-export function field({key,label,type='text',options,placeholder='',required=true,maxlength=100,min,max},value) {
+export function field({key,label,type='text',options,placeholder='',required=true,maxlength=100,min,max,hideLabel=false},value) {
   if(type==='account-picker'){
     const account=options.find(([id])=>id===value&&id);
     const [id,name,mark]=account||[];
     return `<div class="fr-section-field"><span>${esc(label)}</span><button type="button" class="fr-form-account" data-section-action="form-account" aria-label="Счёт: ${esc(name||'Выбрать счёт')}">
-      <span class="fr-form-account-copy"><strong>${esc(name||'Выбрать счёт')}</strong>${id?mark:''}</span>${icon('next')}</button></div>`;
+      <span class="fr-form-account-copy"><strong>${esc(name||'Выбрать счёт')}</strong>${id?mark:''}</span></button></div>`;
   }
   if(type==='category-picker')return `<div class="fr-section-field"><span>${esc(label)}</span>
-    <button type="button" class="fr-field-trigger" data-section-action="form-category-open">${esc(options.find(([id])=>id===value)?.[1]||'Выбрать категорию')}${icon('next')}</button></div>`;
+    <button type="button" class="fr-field-trigger" data-section-action="form-category-open">${esc(options.find(([id])=>id===value)?.[1]||'Выбрать категорию')}</button></div>`;
   if(options)return `<div class="fr-section-field fr-select-field"><span>${esc(label)}</span>
     <button type="button" class="fr-field-trigger" data-select-trigger="${esc(key)}" aria-label="${esc(label)}" aria-haspopup="dialog" aria-expanded="false"><span data-select-caption>${esc(options.find(([id])=>String(id)===String(value))?.[1]||options[0]?.[1]||'Выбрать')}</span>${icon('down')}</button>
     <select tabindex="-1" aria-hidden="true" aria-label="${esc(label)}" name="${esc(key)}" ${required?'required':''}>${options.map(([id,label])=>option(id,label,value)).join('')}</select></div>`;
   const control = type==='checkbox'
       ? `<input type="checkbox" name="${key}" ${value?'checked':''}>`
       : `<input type="${type==='money'?'text':type}" ${type==='money'?'inputmode="decimal" data-decimal':''} name="${key}" ${type==='file'?'accept=".json,application/json"':`value="${esc(type==='money'?decimal(value):value)}"`} ${min?`min="${esc(min)}"`:''} ${max?`max="${esc(max)}"`:''} placeholder="${esc(placeholder)}" maxlength="${maxlength}" ${required?'required':''} autocomplete="off">`;
-  return `<label class="fr-section-field ${type==='checkbox'?'fr-check-field':''}"><span>${esc(label)}</span>${control}</label>`;
+  return `<label class="fr-section-field ${type==='checkbox'?'fr-check-field':''}"><span ${hideLabel?'class="fr-visually-hidden"':''}>${esc(label)}</span>${control}</label>`;
 }
 
 export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside='',insideBefore='',danger=false}) {
@@ -50,7 +52,7 @@ export function amountOverview(value,{label='',caption=''}={}) {
 
 export function summary(month, budget, period) {
   const result = amountText(budget.result);
-  return heading('Сводка','',`<button type="button" class="fr-category-new" data-section-action="budget-settings" aria-label="Настройки сводки">${icon('gear')}</button>`)+monthControl(month)+body(
+  return heading('Сводка','',`<button type="button" class="fr-category-new fr-summary-settings" data-section-action="budget-settings" aria-label="Настройки сводки">${icon('gear')}</button>`)+monthControl(month)+body(
     `<div class="fr-summary-card">
       <div class="fr-month-result"><strong class="np-money ${result.length>11?'fr-result-long':''}" aria-label="Результат месяца ${esc(result)}">${result}</strong>
         <button type="button" data-action="month-result-info" aria-label="Как считается результат месяца" aria-haspopup="dialog">${icon('info')}</button>
@@ -110,7 +112,7 @@ export function shareScreen(state,categories,plan,step,operations) {
 
 export function goalCard(goal) {
   return `<button type="button" class="fr-goal-preview" data-section-action="goal" data-id="${esc(goal.categoryId)}">
-    <span class="fr-goal-heading"><strong>${esc(goal.name)}</strong>${icon('next')}</span>
+    <span class="fr-goal-heading"><strong>${esc(goal.name)}</strong></span>
     ${goalProgress(goal)}
     <span class="fr-goal-available">${small('Доступно потратить')}${moneyLabel(goal.remaining)}</span>
     ${goal.due?small(dateText(goal.due)):''}
@@ -123,7 +125,7 @@ const closureOutcome = goal => goal.spent?'Накоплено и потраче�
 
 export function closedGoalCard(goal) {
   return `<button type="button" class="fr-goal-preview fr-closed-goal-preview" data-section-action="closed-goal" data-id="${esc(goal.categoryId)}">
-    <span class="fr-goal-heading"><strong>${esc(goal.name)}</strong>${icon('next')}</span>
+    <span class="fr-goal-heading"><strong>${esc(goal.name)}</strong></span>
     ${small('Закрыта · '+compactDate(goal.date))}${moneyLabel(goal.accumulated)}${small(closureOutcome(goal))}
   </button>`;
 }
@@ -150,9 +152,9 @@ export function closedGoalDetail(goal,history,d,expanded) {
     (records?`<details data-closed-expenses ${expanded?'open':''}><summary>Расходы${icon('down')}</summary>${records}</details>`:'');
 }
 
-export function accountCard(account,balance,primaryAccount=false) {
+export function accountCard(account,balance,primaryAccount=false,caption='') {
   return `<button type="button" class="fr-typed-account fr-account-list-item ${primaryAccount?'fr-main-account-row':''}" data-section-action="account" data-id="${esc(account.id)}">
-    ${accountCardContents(account,balance)}</button>`;
+    ${accountCardContents(account,balance)}${caption?small(caption):''}</button>`;
 }
 
 export function ledgerRow(name,action,id,amount,meta='') {

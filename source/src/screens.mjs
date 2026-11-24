@@ -4,7 +4,7 @@ const paths={
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
   down:'<path d="m6 9 6 6 6-6"/>',
   swap:'<path d="m21 16-4 4-4-4m4 4V4M3 8l4-4 4 4M7 4v16"/>',
-  gear:'<path d="M10 3h4l.6 2.7 2 .9 2.4-1.4 2 3.5-2 1.8v3l2 1.8-2 3.5-2.4-1.4-2 .9L14 21h-4l-.6-2.7-2-.9L5 18.8l-2-3.5 2-1.8v-3L3 8.7l2-3.5 2.4 1.4 2-.9Z"/><circle cx="12" cy="12" r="3"/>',
+  gear:'<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M10 2h4l.7 2.8 2 .9 2.5-1.4 2.2 3.8-2.1 1.9v4l2.1 1.9-2.2 3.8-2.5-1.4-2 .9L14 22h-4l-.7-2.8-2-.9-2.5 1.4-2.2-3.8 2.1-1.9v-4L2.6 8.1l2.2-3.8 2.5 1.4 2-.9L10 2Zm2 6a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>',
   settings:'<path d="M9 6h11m-9 6h9m-5 6h5M4 6h1m-1 6h3m-3 6h7"/><circle cx="7" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="18" r="2"/>',
   back:'<path d="m15 6-6 6 6 6"/>',
   next:'<path d="m9 6 6 6-6 6"/>',
@@ -16,6 +16,7 @@ const paths={
   plus:'<path d="M12 5v14M5 12h14"/>'
 };
 export const icon=name=>`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
+export const selectionMark=selected=>`<span class="fr-selection-mark" aria-hidden="true">${selected?icon('check'):''}</span>`;
 export const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const labels={expense:'Расход',income:'Доход'};
 const monthFormat=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric'});
@@ -68,7 +69,7 @@ export function categoryRows(doc,kind,chosen,query,locked='',date='',amount=0,pr
     const parentMatch=parent.name.toLocaleLowerCase('ru').includes(q);
     const children=items.filter(c=>c.parentId===parent.id&&(parentMatch||c.name.toLocaleLowerCase('ru').includes(q)));
     if(!parentMatch&&!children.length)return [];
-    const option=c=>`<button type="button" class="fr-operation-picker-choice ${c.parentId?'fr-operation-picker-child':''}" data-category="${esc(c.id)}" aria-pressed="${chosen===c.id}"><span>${esc(c.name)}</span>${chosen===c.id?icon('check'):''}</button>`;
+    const option=c=>`<button type="button" class="fr-operation-picker-choice ${c.parentId?'fr-operation-picker-child':''}" data-category="${esc(c.id)}" aria-pressed="${chosen===c.id}"><span>${esc(c.name)}</span>${selectionMark(chosen===c.id)}</button>`;
     const c=budget?.categories.find(row=>row.id===parent.id&&!row.savings);
     const prior=previous?.date.startsWith(month)?previous.allocations.filter(a=>a.categoryId===parent.id||
       items.some(item=>item.id===a.categoryId&&item.parentId===parent.id)).reduce((sum,a)=>sum+a.amount,0):0;
@@ -114,19 +115,25 @@ export function accountMark(account,withLabel=true){
 }
 export const accountCardContents=(account,balance)=>`<span class="fr-typed-account-name">${accountMark(account,false)}<strong>${esc(account.name)}</strong></span>
     <strong class="np-money">${amountText(balance)}</strong>`;
-export function accounts(doc,balances,selected,operationKind,{shortfall=0,transfer=false,primaryId=''}={}){
-  const rows=Object.entries(accountTypes).map(([type,title])=>{
+export function accountChoices(doc,balances,selected,operationKind,primaryId,selectAction=''){
+  return Object.entries(accountTypes).map(([type,title])=>{
     if(type==='credit'&&operationKind==='income')return '';
     const matches=doc.accounts.filter(a=>!a.archived&&accountType(a)===type);
     if(!matches.length)return '';
-    return `<section class="fr-type-group fr-account-section" aria-label="${title}"><h3 class="fr-section-title">${title}</h3>${matches.map(a=>
-      `<button type="button" data-account="${esc(a.id)}" aria-pressed="${a.id===selected}" class="fr-typed-account fr-account-list-item ${a.id===primaryId?'fr-main-account-row':''}">
-       ${accountCardContents(a,balances[a.id])}${a.id===selected?icon('check'):''}</button>`).join('')}</section>`;
-  });
-  const warning=shortfall?`<div class="fr-funds-warning" role="status">На этом счёте не хватает ${amountText(shortfall)}. Выберите другой счёт${transfer?' или сделайте перевод':''}.
-    ${transfer?'<button type="button" class="fr-section-secondary" data-action="fund-expense">Сделать перевод</button>':''}</div>`:'';
-  return heading('Счёт')+`<div class="fr-payment-actions-list">${warning}${rows.join('')||'<p class="fr-no-operations">Нет доступных счетов.</p>'}</div>`+
-    (rows.some(Boolean)?primary('Далее','account-next',selected&&!shortfall?'':'disabled'):primary('Добавить счёт','first-account'));
+    return `<section class="fr-type-group fr-account-section" aria-label="${title}"><h3 class="fr-section-title">${title}</h3>${matches.map(a=>{
+      const action=selectAction?`data-section-action="${selectAction}" data-id="${esc(a.id)}"`:`data-account="${esc(a.id)}"`;
+      return `<button type="button" ${action} aria-pressed="${a.id===selected}" class="fr-typed-account fr-account-list-item fr-account-choice ${a.id===primaryId?'fr-main-account-row':''}">
+       ${accountCardContents(a,balances[a.id])}${selectionMark(a.id===selected)}</button>`;
+    }).join('')}</section>`;
+  }).join('');
+}
+export function accounts(doc,balances,selected,operationKind,{shortfall=0,transfer=false,primaryId=''}={}){
+  const rows=accountChoices(doc,balances,selected,operationKind,primaryId);
+  const warning=shortfall?`<aside class="fr-funds-warning">
+    <div role="status"><strong>Не хватает ${amountText(shortfall)}</strong><p>Выберите другой счёт${transfer?' или сделайте перевод':''}.</p></div>
+    ${transfer?'<button type="button" class="fr-section-secondary" data-action="fund-expense">Сделать перевод</button>':''}</aside>`:'';
+  return heading('Счёт')+`<div class="fr-payment-actions-list">${warning}${rows||'<p class="fr-no-operations">Нет доступных счетов.</p>'}</div>`+
+    (rows?primary('Далее','account-next',selected&&!shortfall?'':'disabled'):primary('Добавить счёт','first-account'));
 }
 
 export function categoryLabel(doc,id) {
@@ -160,7 +167,7 @@ export function recentOperationRows(doc,rows,accountId){
     const sign=o.kind==='expense'||o.kind==='transfer'&&o.accountId===accountId?'−':'';
     return `<button type="button" class="fr-recent-operation ${o.cancelled?'fr-cancelled':''}" data-operation="${esc(o.id)}">
       <span>${esc(label)}<small>${dateText(o.date)}${o.cancelled?' · Отменена':''}</small></span>
-      <strong class="fr-operation-amount">${sign}${amountText(o.amount)}</strong>${icon('next')}</button>`;
+      <strong class="fr-operation-amount">${sign}${amountText(o.amount)}</strong></button>`;
   }).join('')||'<p class="fr-no-operations">Операций пока нет.</p>';
 }
 
@@ -174,15 +181,15 @@ export function operationRows(doc,rows,query=''){
     const type=operationTypes[o.kind]||'Операция';
     const account=doc.accounts.find(a=>a.id===o.accountId)?.name||'';
     const destination=doc.accounts.find(a=>a.id===o.toAccountId)?.name;
-    const categoryName=o.allocations[0]?.categoryId ? [category.parent,category.name].filter(Boolean).join(' · ') : '';
+    const categoryName=o.allocations[0]?.categoryId ? [category.parent,category.name].filter(Boolean).join(' ') : '';
     const haystack=normalize([type,categoryName,account,destination,o.note].filter(Boolean).join(' '));
     if(!terms.every(term=>haystack.includes(term)))return '';
-    const group=o.date!==day?`<p class="fr-operation-date">${dateText(o.date)}</p>`:'';
+    const group=o.date!==day?`<h2 class="fr-operation-date">${dateText(o.date)}</h2>`:'';
     day=o.date;
     const accountPath=destination?[account,destination].filter(Boolean).join(' → '):account;
     return group+`<button type="button" class="fr-operation-row ${o.cancelled?'fr-cancelled':o.kind}" data-operation="${esc(o.id)}">
       <span class="fr-operation-name">${type}</span><span class="fr-operation-amount">${['income','refund'].includes(o.kind)?'+':o.kind==='expense'?'−':''}${amountText(o.amount)}</span>
-      ${categoryName?`<span class="fr-operation-category">${esc(categoryName)}</span>`:''}
+      ${categoryName?`<span class="fr-operation-category">${esc(category.name)}${category.parent?`<small>${esc(category.parent)}</small>`:''}</span>`:''}
       ${accountPath?`<span class="fr-operation-account">${esc(accountPath)}</span>`:''}
       ${o.cancelled?'<span class="fr-operation-status">Операция отменена</span>':''}</button>`;
   }).join('')||`<p class="fr-no-operations">${q?'Операции не найдены.':'Операций пока нет.'}</p>`;

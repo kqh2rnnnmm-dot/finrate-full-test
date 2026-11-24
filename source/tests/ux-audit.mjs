@@ -208,14 +208,14 @@ async function audit(browser,view,theme,version){
     await back();await button('Счета и кошельки').click();
     await section('account','sample-credit').click();
     await shot('credit');
-    if(!before)await page.getByText('Ближайший срок',{exact:true}).waitFor();
+    if(!before)await page.locator('.fr-account-total').getByText('Можно потратить',{exact:true}).waitFor();
     await back();await section('account','sample-zero').click();
     await shot('credit-zero');
     if(!before){
-      assert.equal(await page.getByText('Долга нет',{exact:true}).count(),1);
-      assert.equal(await button('Погасить').count(),0);
+      assert.ok(await button('Погасить долг').isDisabled());
     }
     await back();await section('account','card').click();
+    if(!before)await button('Ещё').click();
     await section('account-history').click();
     const cancelled=page.locator('[data-operation=audit-cancelled]');
     await cancelled.scrollIntoViewIfNeeded();
@@ -228,7 +228,9 @@ async function audit(browser,view,theme,version){
     await cancelled.click();
     await button('Заметка').click();
     assert.match(await page.getByRole('textbox',{name:'Текст заметки'}).inputValue(),/\nВторая строка заметки\./);
-    await back();await back();await back();await back();await back();
+    await back();await back();await back();
+    if(!before)await page.keyboard.press('Escape');
+    await back();await back();
     await button('Операции').click();
     const query='Сценарий поиска и проверки короткого экрана';
     const search=page.getByRole('searchbox');
@@ -250,8 +252,10 @@ async function audit(browser,view,theme,version){
     await back();
     await button('Перевод').click();
     assert.ok(await button('Далее').isDisabled());
-    await section('transfer-source').click();await section('transfer-pick','long-account').locator('svg').click();
-    await section('transfer-target').click();await section('transfer-pick','long-target').locator('svg').click();
+    await section('transfer-source').click();
+    {const option=section('transfer-pick','long-account');await (before?option.locator('svg'):option).click();}
+    await section('transfer-target').click();
+    {const option=section('transfer-pick','long-target');await (before?option.locator('svg'):option).click();}
     await section('transfer-swap').click();
     await shot('transfer-selected');
     await button('Далее').click();
