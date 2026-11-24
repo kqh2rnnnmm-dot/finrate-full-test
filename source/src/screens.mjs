@@ -4,6 +4,7 @@ const paths={
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
   down:'<path d="m6 9 6 6 6-6"/>',
   swap:'<path d="m21 16-4 4-4-4m4 4V4M3 8l4-4 4 4M7 4v16"/>',
+  gear:'<path d="M10 3h4l.6 2.7 2 .9 2.4-1.4 2 3.5-2 1.8v3l2 1.8-2 3.5-2.4-1.4-2 .9L14 21h-4l-.6-2.7-2-.9L5 18.8l-2-3.5 2-1.8v-3L3 8.7l2-3.5 2.4 1.4 2-.9Z"/><circle cx="12" cy="12" r="3"/>',
   settings:'<path d="M9 6h11m-9 6h9m-5 6h5M4 6h1m-1 6h3m-3 6h7"/><circle cx="7" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="18" r="2"/>',
   back:'<path d="m15 6-6 6 6 6"/>',
   next:'<path d="m9 6 6 6-6 6"/>',
@@ -111,14 +112,16 @@ export function accountMark(account,withLabel=true){
   const type=accountType(account);
   return `<span class="fr-type-mark fr-type-${type}"><span class="fr-type-dot" aria-hidden="true"></span>${withLabel?'<span>'+accountTypes[type]+'</span>':''}</span>`;
 }
-export function accounts(doc,balances,selected,operationKind,{shortfall=0,transfer=false}={}){
+export const accountCardContents=(account,balance)=>`<span class="fr-typed-account-name">${accountMark(account,false)}<strong>${esc(account.name)}</strong></span>
+    <strong class="np-money">${amountText(balance)}</strong>`;
+export function accounts(doc,balances,selected,operationKind,{shortfall=0,transfer=false,primaryId=''}={}){
   const rows=Object.entries(accountTypes).map(([type,title])=>{
     if(type==='credit'&&operationKind==='income')return '';
     const matches=doc.accounts.filter(a=>!a.archived&&accountType(a)===type);
     if(!matches.length)return '';
-    return `<section class="fr-type-group" aria-label="${title}"><h3 class="fr-type-group-title">${title}</h3>${matches.map(a=>
-      `<button type="button" data-account="${esc(a.id)}" aria-pressed="${a.id===selected}" class="fr-typed-account"><span>${esc(a.name)}</span>
-      <small>${amountText(balances[a.id])}</small>${a.id===selected?icon('check'):''}</button>`).join('')}</section>`;
+    return `<section class="fr-type-group fr-account-section" aria-label="${title}"><h3 class="fr-section-title">${title}</h3>${matches.map(a=>
+      `<button type="button" data-account="${esc(a.id)}" aria-pressed="${a.id===selected}" class="fr-typed-account fr-account-list-item ${a.id===primaryId?'fr-main-account-row':''}">
+       ${accountCardContents(a,balances[a.id])}${a.id===selected?icon('check'):''}</button>`).join('')}</section>`;
   });
   const warning=shortfall?`<div class="fr-funds-warning" role="status">На этом счёте не хватает ${amountText(shortfall)}. Выберите другой счёт${transfer?' или сделайте перевод':''}.
     ${transfer?'<button type="button" class="fr-section-secondary" data-action="fund-expense">Сделать перевод</button>':''}</div>`:'';
@@ -151,6 +154,16 @@ ${reviewRow('account','Выбрать счёт операции',account?esc(acc
 export const noteScreen=(text,readonly)=>heading('Заметка')+`<button class="fr-note-done" type="button" data-action="accept-note" ${text.length>500?'disabled':''}>Готово</button><textarea class="fr-note-textarea" aria-label="Текст заметки" ${readonly?'readonly':''}>${esc(text)}</textarea><div class="fr-note-count ${text.length>500?'fr-over-limit':''}">${text.length} / 500</div>`;
 
 const operationTypes={...labels,transfer:'Перевод',adjustment:'Корректировка',refund:'Возврат'};
+export function recentOperationRows(doc,rows,accountId){
+  return rows.map(o=>{
+    const label=o.allocations[0]?.categoryId?categoryLabel(doc,o.allocations[0].categoryId).name:operationTypes[o.kind]||'Операция';
+    const sign=o.kind==='expense'||o.kind==='transfer'&&o.accountId===accountId?'−':'';
+    return `<button type="button" class="fr-recent-operation ${o.cancelled?'fr-cancelled':''}" data-operation="${esc(o.id)}">
+      <span>${esc(label)}<small>${dateText(o.date)}${o.cancelled?' · Отменена':''}</small></span>
+      <strong class="fr-operation-amount">${sign}${amountText(o.amount)}</strong>${icon('next')}</button>`;
+  }).join('')||'<p class="fr-no-operations">Операций пока нет.</p>';
+}
+
 export function operationRows(doc,rows,query=''){
   const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ru').replaceAll('ё','е');
   const q=normalize(query).trim();

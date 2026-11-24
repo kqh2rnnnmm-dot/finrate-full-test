@@ -385,7 +385,17 @@ try{
     await fill('name','Тестовая аренда');
     await fill('amount','150');
     await select('accountId','card');
-    await select('categoryId','home-1');
+    await page.locator('[data-select-trigger=method]').click();
+    await page.getByRole('dialog',{name:'Способ'}).getByRole('button',{name:'Вручную'}).click();
+    await section('form-category-open').click();
+    await section('form-subcategory-parent').click();
+    await section('form-category-new','home').click();
+    await fill('name','Тестовая подкатегория');
+    await submit();
+    assert.equal(await page.locator('[name=amount]').inputValue(),'150');
+    assert.match(await section('form-category-open').innerText(),/Тестовая подкатегория/);
+    await section('form-category-open').click();
+    await section('form-category-select','home-1').click();
     await submit();
     await title('Платежи');
     await shot('payments-app');
@@ -427,7 +437,8 @@ try{
     await fill('name','Тестовая связь');
     await fill('amount','25');
     await select('accountId','card');
-    await select('categoryId','home-0');
+    await section('form-category-open').click();
+    await section('form-category-select','home-0').click();
     await submit();
     const initial=section('payment-detail').filter({hasText:'Тестовая аренда'});
     await initial.dispatchEvent('pointerdown',{pointerType:'touch',clientX:130,clientY:230});
