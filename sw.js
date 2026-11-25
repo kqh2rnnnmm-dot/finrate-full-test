@@ -1,8 +1,8 @@
-const build = {"release":"0.2.0-test.13","id":"a2b3744f5886639b"};
+const build = {"release":"0.2.0-test.14","id":"d2e39b2fd6bada77"};
 const scope = self.registration.scope;
 const prefix = 'finrate-full-restart:'+scope+':';
 const cacheName = prefix+build.id;
-const assets = new Map(Object.entries({"manifest.webmanifest":"53505039d9e231d3a645b0074f54f82b93eae65ac25345326b9349cee840f44c","icon-192.png":"02de571ad2d51f9c5ad3e7025d69c3757144326731163ecfe9a76b7fb13bcfa4","icon-512.png":"dc5ebe3e204b64dfeb6585959145d7823c5db9e9af7e3fe45ef00a43bb9a0c0b","apple-touch-icon.png":"b5885c943dfa178c5b7043b35c80cb0f13b3ddc34f7f4085663bf9eac5d1e46d","app-a2b3744f5886639b.js":"a9bc26be31b6701b1f1d2aecdd9c3e4c885d7359d8c48e5d75d7fbbac1ccbbb1","styles-a2b3744f5886639b.css":"9270c3db415f925c5d25c1657e499c06db138cad95ce37d1ddd6542176591d3e","index.html":"0a9473c646686dfc571b502029d5a61c8de65ec21a11e305fc970d7df89e4e28"}).map(([path,hash])=>[new URL(path,scope).href,hash]));
+const assets = new Map(Object.entries({"manifest.webmanifest":"53505039d9e231d3a645b0074f54f82b93eae65ac25345326b9349cee840f44c","icon-192.png":"02de571ad2d51f9c5ad3e7025d69c3757144326731163ecfe9a76b7fb13bcfa4","icon-512.png":"dc5ebe3e204b64dfeb6585959145d7823c5db9e9af7e3fe45ef00a43bb9a0c0b","apple-touch-icon.png":"b5885c943dfa178c5b7043b35c80cb0f13b3ddc34f7f4085663bf9eac5d1e46d","app-d2e39b2fd6bada77.js":"47ca32f545938081b21fe847a208cc498bc704a816d01f9be2cd20aafe2085fe","styles-d2e39b2fd6bada77.css":"17b032731fb9dfeb5cd414b3c7dd6ed6f8730bace51a6cdd8ff48271253c846d","index.html":"63ace9d9d7ccca7911ea7fdc863f208283e89b289abc9e8331362243605a0de3"}).map(([path,hash])=>[new URL(path,scope).href,hash]));
 const index = new URL('index.html',scope).href;
 
 async function precache() {

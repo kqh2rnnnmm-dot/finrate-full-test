@@ -8,7 +8,7 @@ import {chromium} from 'playwright';
 import binary from '@sparticuz/chromium';
 import {scope,serveFixture,fixture} from './fixture-server.mjs';
 
-const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819',previous:'0a0fd28c7db8f2e50361b34ff4776f5a2d210cc6',test12:'092cc14f4bff8124bf6b1110de4002707bb88250'};
+const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819',previous:'0a0fd28c7db8f2e50361b34ff4776f5a2d210cc6',test13:'33cc8ed7cd86482277fccf34c6487226ed05a853'};
 const work=await mkdtemp(join(tmpdir(),'finrate-update-'));
 const results=process.env.FINRATE_UPDATE_SCREENSHOTS || 'verification/visual-patch';
 const readBuild=async path=>JSON.parse((await readFile(join(path,'sw.js'),'utf8')).match(/const build = (.*);/)[1]);
@@ -242,14 +242,14 @@ try{
   await upgradeGoals.close();
   console.log('PASS published 0a0fd28: closed goals from test.3 open after manual update, with original snapshots');
 
-  served='test12';
+  served='test13';
   const upgradeCredit=await browser.newContext(options);
   const creditPage=await upgradeCredit.newPage();
   await creditPage.clock.setFixedTime(new Date('2026-11-25T12:00:00Z'));
   const priorCredit=await fixture(creditPage,url,'visual');
   await creditPage.goto(url);
   await ready(creditPage);
-  assert.equal(await root(creditPage).getAttribute('data-release'),'0.2.0-test.12');
+  assert.equal(await root(creditPage).getAttribute('data-release'),'0.2.0-test.13');
   served='A';
   await update(creditPage);
   await creditPage.getByText('Доступна версия '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
@@ -270,7 +270,7 @@ try{
     await button(creditPage,'Назад').click();
   }
   await upgradeCredit.close();
-  console.log('PASS test.12 upgrade: balances, credit limits, debt and own funds are preserved');
+  console.log('PASS test.13 upgrade: balances, credit limits, debt and own funds are preserved');
 
   for(const ownData of [false,true]){
     served='legacy';

@@ -25,9 +25,12 @@ function edit(d,id,input,save=saveOperation) {
 }
 test('Shared shares preserve previous months and use the planned income',()=>{
   const d=setup();
-  incomes.saveIncome(d,{id:'salary-plan',name:'Тестовый план',amount:10000000,start:'2026-10-10',repeat:'monthly',accountId:'bank',categoryId:'salary'});
+  incomes.saveIncome(d,{id:'salary-plan',name:'Тестовый план',amount:7000000,start:'2026-10-10',repeat:'monthly',accountId:'bank',categoryId:'salary'});
+  incomes.saveIncome(d,{id:'bonus-plan',name:'Тестовая доплата',amount:3000000,start:'2026-10-25',repeat:'monthly',accountId:'bank',categoryId:'salary'});
   budget.saveShares(d,'2026-10',{housing:5000,food:3000});
   budget.saveShares(d,'2026-11',{housing:4500,food:5500});
+  assert.equal(budget.monthlyOverview(d,'2026-11').expected,10000000);
+  assert.equal(budget.monthlyOverview(d,'2026-11').income,0);
   for(const [month,expected] of [['2026-10',5000000],['2026-11',4500000],['2026-12',4500000]]){
     assert.equal(budget.monthlyOverview(d,month).categories.find(c=>c.id==='housing').plan,expected);
   }
