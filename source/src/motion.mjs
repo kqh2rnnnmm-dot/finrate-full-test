@@ -31,21 +31,39 @@ export function bindMenuGlyph(button) {
 export function bindTrack(track, open) {
   const knob=track.querySelector('.fr-knob');
   let pointer=null, startY=0, selected=null, timer;
+  const travel=()=>Math.min(113,track.clientHeight*.33);
+  function illumination(distance,limit){
+    const amount=Math.min(Math.abs(distance)/limit,1)*.32;
+    track.style.setProperty('--expense-glow',distance<0?amount:0);
+    track.style.setProperty('--income-glow',distance>0?amount:0);
+  }
   const reset=()=>{
+    illumination(0,1);
     selected=null;pointer=null;track.classList.remove('fr-dragging');
-    track.style.setProperty('--y','0px');track.dataset.stage='neutral';
+    track.style.setProperty('--y','0px');
+    delete track.dataset.knobEdge;
   };
   function select(kind){
     if(timer)return;
-    track.dataset.stage=kind;
-    track.style.setProperty('--y', (kind==='expense'?-1:1)*Math.min(113,track.clientHeight*.33)+'px');
+    illumination(kind==='expense'?-1:1,1);
+    track.classList.add('fr-snapping');
+    track.style.setProperty('--y', (kind==='expense'?-1:1)*travel()+'px');
+    if(reduced.matches)track.dataset.knobEdge=kind;
+    else if(track.dataset.knobEdge!==kind){
+      knob.addEventListener('transitionend',event=>{
+        if(event.propertyName==='transform')track.dataset.knobEdge=kind;
+      },{once:true});
+    }
     timer=setTimeout(()=>{if(track.isConnected)open(kind);},reduced.matches?0:220);
   }
   function drag(y){
-    const distance=y-startY, threshold=Math.min(92,track.clientHeight*.27), limit=Math.min(113,track.clientHeight*.33);
+    const distance=y-startY, threshold=Math.min(92,track.clientHeight*.27), limit=travel();
+    illumination(distance,limit);
+    if(distance<=-limit)track.dataset.knobEdge='expense';
+    else if(distance>=limit)track.dataset.knobEdge='income';
+    else delete track.dataset.knobEdge;
     selected=distance<=-threshold?'expense':distance>=threshold?'income':null;
     track.style.setProperty('--y',Math.max(-limit,Math.min(limit,distance))+'px');
-    track.dataset.stage=selected||'neutral';
   }
   track.querySelectorAll('[data-entry]').forEach(button=>button.onclick=()=>select(button.dataset.entry));
   knob.onpointerdown=event=>{

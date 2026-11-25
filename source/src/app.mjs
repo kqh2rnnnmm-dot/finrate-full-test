@@ -316,9 +316,9 @@ function action(id){
       };
       dialog.onclick=event=>{if(event.target===dialog)close();};
       dialog.oncancel=event=>{event.preventDefault();close();};
-      pressFeedback(trigger);
       dialog.showModal();
       anchorPopover(dialog,trigger);
+      pressFeedback(trigger);
       animatePopover(dialog);
       return;
     }

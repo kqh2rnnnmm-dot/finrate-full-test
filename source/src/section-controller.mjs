@@ -297,7 +297,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       choices('kind','Тип счёта',[['bank','Безнал'],['cash','Наличные'],...(options.kind==='income'?[]:[['credit','Кредитная карта']])]),
       text('name','Название'),number('opening','Начальный остаток',false),number('limit','Кредитный лимит',false),
       choices('mode','Беспроцентный период',[['months','До конца месяца'],['days','Дней после покупки'],['statement','По выписке']]),
-      number('days','Количество дней',false)
+      number('days','Количество месяцев',false)
     ],{kind:'bank',mode:'months'},v=>commit('account.add',d=>{
       const credit = v.kind==='credit';
             const entered=!credit&&v.opening?money(v.opening):0;
@@ -320,11 +320,11 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
     form('Условия кредитной карты',[
       number('limit','Кредитный лимит'),
       choices('mode','Беспроцентный период',[['months','По месяцам'],['days','Дней после покупки'],['statement','По выписке']]),
-      number('days','Месяцев или дней',false)
+      number('days','Количество месяцев',false)
     ],{limit:numeric(a.credit.limit),mode:a.credit.grace.mode,days:String(a.credit.grace.days||a.credit.grace.months||'')},
     v=>commit('account.credit-settings',d=>setAccountPolicy(d,a.id,{
       financeType:'credit',credit:{...a.credit,limit:asAmount(v.limit),grace:grace(v)}
-    })));
+    })),{dynamic:'credit-settings'});
   }
   function repaymentOptions(d,id,asOf) {
     const credit=creditSummary(d,id,asOf,creditLedger({...d,operations:d.operations.filter(o=>o.date<=asOf)}));
@@ -428,11 +428,11 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   function goalForm(goal) {
     const id = goal?.categoryId || uid();
     form(goal?'Изменить категорию':'Новая цель',[text('name',goal?'Категория':'Название'),number('target',goal?'Сумма цели':'Целевая сумма'),
-      day('due','Срок',false),number('share','Доля плана, %',false)],{
+      day('due','Срок',false),{key:'share',type:'goal-share'}],{
       name:goal?.name,target:numeric(goal?.target),due:goal?.due,share:String(budget.rateAt(doc(),id,todayMonth())/100 || '')
     },v=>commit('savings.goal',d=>budget.saveSavingsGoal(d,{
       id,name:v.name,target:asAmount(v.target),due:v.due,bps:percent(v.share),today:date()
-    }),()=>finishCategoryCreation('savings')));
+    }),()=>finishCategoryCreation('savings')),{goalShareId:id});
   }
   function incomeForm(source=null) {
     const id = source?.id || uid();
@@ -625,6 +625,31 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       ).join('')}</details>`:''));
   }
 
+  function goalShare(s,d) {
+    const month=todayMonth();
+    const allocated=budget.expenseCategories(d).filter(c=>c.id!==s.goalShareId)
+      .reduce((total,c)=>total+budget.rateAt(d,c.id,month),0);
+    const room=Math.max(0,10000-allocated);
+    const step=budget.budgetPreferences(d).step*100;
+    const chosen=percent(s.values.share);
+    return {allocated,room,step,chosen};
+  }
+  function updateGoalShare(form,chosen,room) {
+    const format=n=>new Intl.NumberFormat('ru-RU').format(n/100)+'%';
+    form.querySelector('[data-goal-chosen]').textContent=format(chosen);
+    form.querySelector('[data-goal-free]').textContent=format(Math.max(0,room-chosen));
+  }
+  function goalShareMarkup(s,d) {
+    const {allocated,room,step,chosen}=goalShare(s,d);
+    const format=n=>new Intl.NumberFormat('ru-RU').format(n/100)+'%';
+    return `<section class="fr-goal-share">
+      <div class="np-row"><label for="goal-share">Доля плана</label><strong data-goal-chosen>${format(chosen)}</strong></div>
+      <input id="goal-share" data-goal-share type="range" min="0" max="${Math.ceil(room/step)}" step="1"
+        value="${chosen>=room?Math.ceil(room/step):Math.round(chosen/step)}" ${room?'':'disabled'} aria-valuetext="${format(chosen)}">
+      <div class="np-row"><span>Свободно к распределению</span><strong data-goal-free>${format(Math.max(0,room-chosen))}</strong></div>
+      <small class="fr-muted">На другие категории и цели уже распределено ${format(allocated)}</small>
+    </section>`;
+  }
   function render() {
     const s = state(), d = doc();
     if(s.dynamic==='credit-repay'){
@@ -967,6 +992,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
             ui.actionButton('Отменить запись оплаты','payment-fact-cancel')));
       }
       case 'form': {
+        if(s.goalShareId)return ui.formScreen({...s,busy,fields:s.fields.filter(f=>f.key!=='share'),inside:goalShareMarkup(s,d)});
         if(s.openingDebtCount&&(s.dynamic!=='account'||s.values.kind==='credit')){
           const debt=readOpeningDebtsForPreview(s.values,s.openingDebtCount);
           return ui.formScreen({...s,busy,fields:s.dynamic==='account'?[...visibleFields(s).filter(f=>!['opening','openingDue'].includes(f.key)),...openingDebtFields(s.openingDebtCount)]:s.fields,
@@ -1079,8 +1105,11 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
   }
 
   function visibleFields(s) {
-    if (s.dynamic==='account') return s.fields.filter(f=>s.values.kind==='credit'?
-      (f.key!=='days'||s.values.mode!=='statement'):!['limit','mode','days','openingDue'].includes(f.key));
+    if (s.dynamic==='credit-settings'||(s.dynamic==='account'&&s.values.kind==='credit')){
+      return s.fields.filter(f=>f.key!=='days'||s.values.mode!=='statement').map(f=>f.key==='days'?
+        {...f,label:s.values.mode==='days'?'Количество дней':'Количество месяцев'}:f);
+    }
+    if (s.dynamic==='account') return s.fields.filter(f=>!['limit','mode','days','openingDue'].includes(f.key));
     if (s.dynamic==='income') return s.fields.filter(f=>
       (f.key!=='day'||['monthly','yearly'].includes(s.values.repeat))&&
       (f.key!=='month'||s.values.repeat==='yearly')&&(f.key!=='weekday'||s.values.repeat==='weekly'));
@@ -1557,6 +1586,13 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       s.query=input.value;
       host.querySelector('[data-section-results]').innerHTML=categoryResults(s);
     }
+    if(input.matches('[data-goal-share]')){
+      const {room,step}=goalShare(s,doc());
+      const chosen=Math.min(Number(input.value)*step,room);
+      s.values.share=String(chosen/100);
+      input.setAttribute('aria-valuetext',new Intl.NumberFormat('ru-RU').format(chosen/100)+'%');
+      return updateGoalShare(input.closest('form'),chosen,room);
+    }
     if(input.matches('[data-batch]')){
       s.selected=s.selected.filter(id=>id!==input.dataset.batch);
       if(input.checked)s.selected.push(input.dataset.batch);
@@ -1582,7 +1618,7 @@ export function createSections(host, {redraw, exit, startOperation, openOperatio
       if(s.repayMonth!=='all'&&!months.has(s.repayMonth))s.repayMonth='all';
       remember();redraw();return;
     }
-    if ((s.dynamic==='account'&&['kind','mode'].includes(input.name))||(s.dynamic==='income'&&input.name==='repeat')){
+    if ((s.dynamic==='account'&&['kind','mode'].includes(input.name))||(s.dynamic==='credit-settings'&&input.name==='mode')||(s.dynamic==='income'&&input.name==='repeat')){
       remember();redraw();host.querySelector(`[data-select-trigger="${input.name}"]`)?.focus({preventScroll:true});
     }
   });

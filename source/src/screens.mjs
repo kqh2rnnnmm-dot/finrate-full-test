@@ -4,7 +4,7 @@ const paths={
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
   down:'<path d="m6 9 6 6 6-6"/>',
   swap:'<path d="m21 16-4 4-4-4m4 4V4M3 8l4-4 4 4M7 4v16"/>',
-  gear:'<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M10 2h4l.7 2.8 2 .9 2.5-1.4 2.2 3.8-2.1 1.9v4l2.1 1.9-2.2 3.8-2.5-1.4-2 .9L14 22h-4l-.7-2.8-2-.9-2.5 1.4-2.2-3.8 2.1-1.9v-4L2.6 8.1l2.2-3.8 2.5 1.4 2-.9L10 2Zm2 6a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>',
+  gear:'<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M19.84 9.60 20.18 10.11 22.40 10.54 22.40 13.46 20.18 13.89 19.84 14.40 19.24 15.85 19.12 16.45 20.39 18.32 18.32 20.39 16.45 19.12 15.85 19.24 14.40 19.84 13.89 20.18 13.46 22.40 10.54 22.40 10.11 20.18 9.60 19.84 8.15 19.24 7.55 19.12 5.68 20.39 3.61 18.32 4.88 16.45 4.76 15.85 4.16 14.40 3.82 13.89 1.60 13.46 1.60 10.54 3.82 10.11 4.16 9.60 4.76 8.15 4.88 7.55 3.61 5.68 5.68 3.61 7.55 4.88 8.15 4.76 9.60 4.16 10.11 3.82 10.54 1.60 13.46 1.60 13.89 3.82 14.40 4.16 15.85 4.76 16.45 4.88 18.32 3.61 20.39 5.68 19.12 7.55 19.24 8.15Z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>',
   settings:'<path d="M9 6h11m-9 6h9m-5 6h5M4 6h1m-1 6h3m-3 6h7"/><circle cx="7" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="18" r="2"/>',
   back:'<path d="m15 6-6 6 6 6"/>',
   next:'<path d="m9 6 6 6-6 6"/>',
@@ -30,7 +30,8 @@ export const primary=(message,action,attr='')=>`<button type="button" class="fr-
 export const heading=(title,kind='',side='',expandable=false)=>`<header class="fr-header"><button type="button" class="fr-back" data-action="back" aria-label="Назад">${icon('back')}</button><h1 class="fr-title ${kind}" ${expandable?'data-full-name':''}>${esc(title)}</h1>${side}</header>`;
 
 export const home=()=>`<div class="fr-home-header"><div class="fr-brand">FinRate</div><button type="button" class="fr-quick-home-entry fr-menu" data-action="summary">Сводка</button></div>
-<main class="fr-home-body"><div class="fr-track" data-stage="neutral">
+<main class="fr-home-body"><div class="fr-track">
+<span class="fr-track-glow" aria-hidden="true"></span>
 <button class="fr-pole fr-pole-top" type="button" data-entry="expense"><span aria-hidden="true">↑</span><span>РАСХОД</span></button>
 <button class="fr-pole fr-pole-bottom" type="button" data-entry="income"><span aria-hidden="true">↓</span><span>ДОХОД</span></button>
 <button class="fr-knob" type="button" aria-label="Вверх — расход, вниз — доход"></button>

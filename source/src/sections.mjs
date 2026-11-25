@@ -85,6 +85,7 @@ export function goalProgress(goal) {
 export function shareScreen(state,categories,plan,step,operations) {
   const settings=state.single?'':`<button type="button" class="fr-category-new" data-section-action="slider-step" aria-label="Шаг ползунка">${icon('settings')}</button>`;
   const totals=`<div class="np-island fr-share-totals">
+    ${state.page==='distribution'?`<div class="np-row fr-plan-basis"><span>План на ${new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric'}).format(new Date(state.month+'-01T12:00:00')).replace(/ г\.$/,'')}</span>${moneyLabel(plan)}</div>`:''}
     <div class="np-row fr-share-free"><span>Свободно к<br>распределению</span><strong data-share-free></strong></div>
     <div class="fr-budget-bar fr-budget-bar--wide" aria-hidden="true"><span data-share-bar></span></div>
     <div class="np-row fr-share-caption"><span>Распределено</span><span data-share-total></span></div>

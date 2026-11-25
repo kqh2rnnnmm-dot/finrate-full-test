@@ -1,12 +1,18 @@
 import {selectionMark} from './screens.mjs';
 
+const activeAnimations=new WeakMap();
 const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function animatePopover(panel,closing=false){
   if(!panel||reducedMotion())return Promise.resolve();
+  const style=getComputedStyle(panel);
+  const current={opacity:style.opacity,transform:style.transform};
+  activeAnimations.get(panel)?.cancel();
   const compact={opacity:0,transform:'scale(.87)'},full={opacity:1,transform:'scale(1)'};
-  return panel.animate(closing?[full,compact]:[compact,full],{
+  const animation=panel.animate(closing?[current,compact]:[compact,full],{
     duration:closing?145:220,easing:closing?'ease-in':'cubic-bezier(.17,.86,.29,1)',fill:closing?'forwards':'none'
-  }).finished.catch(()=>{});
+  });
+  activeAnimations.set(panel,animation);
+  return animation.finished.catch(()=>{});
 }
 export function pressFeedback(trigger){
   if(trigger&&!reducedMotion())trigger.animate([
@@ -40,6 +46,7 @@ export function bindSelectPopovers(host){
     if(select.disabled||field.querySelector('dialog'))return;
     const panel=document.createElement('dialog');
     panel.className='fr-select-popover';
+    panel.tabIndex=-1;
     panel.setAttribute('aria-label',select.getAttribute('aria-label'));
     const options=[...select.options].filter(option=>!option.disabled&&(!select.required||option.value));
     if(!options.length)return;
@@ -70,8 +77,10 @@ export function bindSelectPopovers(host){
     panel.onclick=event=>{if(event.target===panel)close();};
     panel.oncancel=event=>{event.preventDefault();close();};
     field.append(panel);trigger.setAttribute('aria-expanded','true');
+    panel.showModal();
+    panel.focus({preventScroll:true});
+    anchorPopover(panel,trigger);
     pressFeedback(trigger);
-    panel.showModal();anchorPopover(panel,trigger);
     animatePopover(panel);
   });
 }
