@@ -1,15 +1,17 @@
-import {anchorPopover,animatePopover,bindSelectPopovers,pressFeedback} from './popovers.mjs';
+import {closeAnimatedDialog,anchorPopover,animatePopover,bindSelectPopovers,pressFeedback} from './popovers.mjs';
 import {spendingRoom, isCredit} from './engine/credit.mjs';
 import {editAmount,normalizedAmount,validAmount} from './amount-pad.mjs';
-import {bindUpdate} from './update.mjs';
+import {openHelp,attachHelp} from './first-use-help.mjs';
+import {incomeOccurrences} from './engine/planning.mjs';
 import * as ledger from './ledger.mjs';
 import {createSections} from './section-controller.mjs';
 import {recordHistory, recordRows, field} from './sections.mjs';
 import * as screen from './screens.mjs';
-import {categoryRoot as rootCategory, monthlyOverview,primaryAccount,expenseShortfall} from './engine/month-budget.mjs';
+import {categoryRoot as rootCategory, monthlyOverview,distributionConfigured,monthEnd,primaryAccount,expenseShortfall} from './engine/month-budget.mjs';
 import {localDate,refundRemaining} from './engine/operations.mjs';
 import {money,uid} from './engine/model.mjs';
 import {bindMenuGlyph,bindTrack} from './motion.mjs';
+import {bindUpdate} from './update.mjs';
 
 const root=document.querySelector('#finrate');
 const host=root.querySelector('.fr-route-host');
@@ -22,16 +24,18 @@ let buffer='', query='', operationQuery='', categoryForm=null, showCreate=false;
 let calendar=parseMonth(localDate());
 let onOperationSaved;
 let sectionParent='home', sectionScroll=0, categoryRoot='', fixedAccount='';
-let operationFilters={}, pendingFilters={}, filterQuery='', filterScroll=0;
+let operationFilters={}, pendingFilters={}, filterQuery='', filterScroll=0, pickedFilters=[];
+let pendingCategory='', pendingDate='';
 let note='', error='', busy=false, leave=null, accountChoice='';
 
 const doc=ledger.document;
 const listNode=()=>host.querySelector('.fr-operation-list,.np-body');
 function move(to) { route=to;render(); }
 function resetDraft(){onOperationSaved=null;categoryRoot='';fixedAccount='';accountChoice='';draft=null;previous=null;initial=null;editing=false;error='';leave=null;}
-const sectionRoutes=new Set(['summary','accounts','categories','transfer','payments','income-plans','savings','budget-settings','data-management']);
+const sectionRoutes=new Set(['summary','accounts','categories','transfer','payments','income-plans','savings','data-management','credit-intro']);
 const sections=createSections(host,{
   redraw:()=>move('section'),
+  help:openHelp,
   exit:()=>{
     move(sectionParent);
     if(listNode())listNode().scrollTop=sectionScroll;
@@ -61,11 +65,11 @@ function start(kind,context={}){
   origin=route;originScroll=listNode()?.scrollTop||0;
   onOperationSaved=context.onSaved;
   categoryRoot=context.categoryRoot||'';fixedAccount=context.accountId||'';
-  draft={id:uid(),kind,amount:'',categoryId:context.categoryId||'',date:localDate(),accountId:fixedAccount||primaryAccount(doc())?.id||'',note:'',creditDueDate:''};
+  draft={id:uid(),kind,amount:'',categoryId:context.categoryId||'',date:localDate(),accountId:fixedAccount||primaryAccount(doc(),{allowCredit:kind==='expense'})?.id||null,note:'',creditDueDate:''};
   initial=JSON.stringify(draft);buffer='';move('amount');
 }
 function operationsScreen(){
-  const active=Object.values(operationFilters).filter(Boolean).length;
+  const active=Object.values(operationFilters).filter(value=>Array.isArray(value)?value.length:Boolean(value)).length;
   return screen.heading('Операции')+`<div class="fr-toolbar"><input type="search" class="fr-payment-actions-input" data-search-operation
     aria-label="Поиск по категории, подкатегории, счёту или заметке" placeholder="Поиск" value="${screen.esc(operationQuery)}">
     <button type="button" class="fr-filter-button" data-action="filter-open" aria-label="Фильтры${active?' · '+active:''}"><span>Фильтры</span>${active?`<span class="fr-filter-count" aria-hidden="true">${active}</span>`:''}</button></div>
@@ -79,12 +83,12 @@ function filterScreen(){
     {key:'from',label:'С даты',type:'date',required:false},
     {key:'to',label:'По дату',type:'date',required:false}
   ];
-  const selected=doc().categories.find(c=>c.id===pendingFilters.category);
+  const selected=doc().categories.filter(c=>pendingFilters.categories?.includes(c.id));
   const canPick=!pendingFilters.kind||['income','expense'].includes(pendingFilters.kind);
   return screen.heading('Фильтры')+`<div class="np-body fr-filters-body">
     ${fields.slice(0,2).map(f=>field({...f,required:false},pendingFilters[f.key])).join('')}
-    <div class="fr-section-field"><span>Категория</span><button class="fr-section-secondary" type="button"
-      data-action="filter-category" ${canPick?'':'disabled'}>${screen.esc(selected?.name||'Все категории')}</button></div>
+    <div class="fr-section-field"><span>Категории</span><button class="fr-section-secondary" type="button"
+      data-action="filter-category" ${canPick?'':'disabled'}>${screen.esc(selected.length>1?'Выбрано: '+selected.length:selected[0]?.name||'Все категории')}</button></div>
     ${fields.slice(2).map(f=>field(f,pendingFilters[f.key])).join('')}
     <p role="alert" class="fr-create-error">${screen.esc(error)}</p></div>
     <div class="fr-filter-actions"><button type="button" class="fr-section-secondary" data-action="filter-reset">Сбросить</button>
@@ -93,7 +97,7 @@ function filterScreen(){
 function filterCategories(){
   const q=filterQuery.trim().toLocaleLowerCase('ru');
   const options=(c,child=false)=>`<button type="button" class="fr-operation-picker-choice ${child?'fr-operation-picker-child':''}"
-    data-filter-id="${screen.esc(c.id)}" aria-pressed="${c.id===pendingFilters.category}">${screen.esc(c.name)}${screen.selectionMark(c.id===pendingFilters.category)}</button>`;
+    data-filter-id="${screen.esc(c.id)}" aria-pressed="${pickedFilters.includes(c.id)}">${screen.esc(c.name)}${screen.selectionMark(pickedFilters.includes(c.id))}</button>`;
   return ['expense','income'].filter(kind=>!pendingFilters.kind||kind===pendingFilters.kind).map(kind=>{
     const categories=doc().categories.filter(c=>c.type===kind);
     return categories.filter(c=>!c.parentId).map(c=>{
@@ -123,8 +127,10 @@ function finish(){
   const list=listNode();if(list)list.scrollTop=scroll;
 }
 
-function openCategory(){query='';showCreate=false;move('category');}
-function openCalendar(){calendar=parseMonth(draft.date);move('date');}
+function openCategory(){pendingCategory=draft.categoryId;query='';showCreate=false;move('category');}
+function openCalendar(){pendingDate=draft.date;calendar=parseMonth(draft.date);move('date');}
+const hasAccounts=()=>doc().accounts.some(a=>!a.archived);
+function afterDate(){return fixedAccount?chooseAccount(fixedAccount):hasAccounts()?openAccountSelection():showReview();}
 function selectedCategory(id){
   draft.categoryId=id;
   if(editing)showReview();else openCalendar();
@@ -148,7 +154,7 @@ function chooseAccount(id){
   draft.accountId=id;
   const account=doc().accounts.find(a=>a.id===id);
   if(draft.kind==='expense'&&account?.credit?.grace.mode==='statement'&&!draft.creditDueDate){
-    calendar=parseMonth(draft.date);
+    pendingDate=draft.creditDueDate;calendar=parseMonth(draft.date);
     return move('credit-date');
   }
   return showReview();
@@ -161,6 +167,7 @@ function back(){
   switch(route){
     case 'home': return;
     case 'menu': return move('home');
+    case 'help': return move('menu');
     case 'section': return sections.back();
     case 'operations': return move('menu');
     case 'filters': return returnToOperations();
@@ -185,7 +192,7 @@ function back(){
     case 'review':
       if(previous&&isDirty())return getLeave(finish);
       if(previous)return finish();
-      return fixedAccount?openCalendar():openAccountSelection();
+      return fixedAccount||!hasAccounts()?openCalendar():openAccountSelection();
     case 'note':
       if(note!==draft.note&&!previous?.cancelled)return getLeave(showReview);
       return showReview();
@@ -203,7 +210,7 @@ function edit(field){
   if(field==='date')openCalendar();
   if(field==='category')openCategory();
   if(field==='account'&&!fixedAccount)openAccountSelection();
-  if(field==='credit-date'){calendar=parseMonth(draft.creditDueDate||draft.date);move('credit-date');}
+  if(field==='credit-date'){pendingDate=draft.creditDueDate;calendar=parseMonth(draft.creditDueDate||draft.date);move('credit-date');}
   if(field==='note'){note=draft.note;move('note');}
 }
 
@@ -265,11 +272,8 @@ async function createCategory(){
   try{
     await ledger.addOperationCategory({id,name:name.trim(),type:draft.kind,parentId:parentId||null});
     busy=false;
-    if(!parentId){
-      categoryForm={sub:true,name:'',initial:'',parentId:id,error:''};
-      return render();
-    }
-    selectedCategory(id);
+    if(categoryRoot&&parentId!==categoryRoot)categoryRoot='';
+    pendingCategory=id;showCreate=false;query='';move('category');
   }catch(cause){
     categoryForm.error=cause.code==='NAME_EXISTS'?'Такое название уже есть.':'Не удалось создать категорию.';
     busy=false;render();
@@ -282,6 +286,14 @@ function action(id){
   switch(id){
     case 'back': return back();
     case 'operations': return move(id);
+    case 'help': return move('help');
+    case 'category-next': if(pendingCategory)return selectedCategory(pendingCategory);return;
+    case 'parent-next': if(categoryForm.parentChoice){categoryForm.parentId=categoryForm.parentChoice;return render();}return;
+    case 'date-next':
+      if(!pendingDate)return;
+      if(route==='credit-date'){draft.creditDueDate=pendingDate;return showReview();}
+      draft.date=pendingDate;
+      return editing?showReview():afterDate();
     case 'filter-open':
       filterScroll=listNode().scrollTop;pendingFilters={...operationFilters};error='';return move('filters');
     case 'filter-reset':
@@ -292,11 +304,13 @@ function action(id){
       }
       operationFilters={...pendingFilters};filterScroll=0;return returnToOperations();
     case 'filter-category':
-      filterQuery='';return move('filter-picker');
+      filterQuery='';pickedFilters=[...(pendingFilters.categories||[])];return move('filter-picker');
+    case 'filter-category-save':
+      pendingFilters.categories=[...pickedFilters];return move('filters');
     case 'section-save-share': case 'transfer-accept': return sections.action(id);
     case 'account-next':
       if(route!=='account'||selectedAccountWarning().shortfall||
-        !doc().accounts.some(a=>a.id===accountChoice&&!a.archived&&(draft.kind!=='income'||a.financeType!=='credit')))return;
+        (accountChoice!==null&&!doc().accounts.some(a=>a.id===accountChoice&&!a.archived&&(draft.kind!=='income'||a.financeType!=='credit'))))return;
       return chooseAccount(accountChoice);
     case 'fund-expense': {
       const warning=selectedAccountWarning();
@@ -307,18 +321,11 @@ function action(id){
       const dialog=host.querySelector('.fr-info-dialog');
       const trigger=host.querySelector('[data-action=month-result-info]');
       if(!dialog||dialog.open)return;
-      const close=()=>{
-        if(dialog.dataset.closing)return;
-        dialog.dataset.closing='true';
-        animatePopover(dialog,true).then(()=>{
-          dialog.close();delete dialog.dataset.closing;trigger.focus({preventScroll:true});
-        });
-      };
+      const close=()=>closeAnimatedDialog(dialog)?.then(()=>trigger.focus({preventScroll:true}));
       dialog.onclick=event=>{if(event.target===dialog)close();};
       dialog.oncancel=event=>{event.preventDefault();close();};
       dialog.showModal();
       anchorPopover(dialog,trigger);
-      pressFeedback(trigger);
       animatePopover(dialog);
       return;
     }
@@ -355,7 +362,7 @@ function action(id){
       return;
     }
     case 'new-category': case 'new-subcategory':
-      categoryForm={sub:id==='new-subcategory',name:query.trim(),initial:'',parentId:categoryRoot,error:''};
+      categoryForm={sub:id==='new-subcategory',name:query.trim(),initial:'',parentId:'',error:''};
       return move('category-new');
     case 'save-category': return void createCategory();
     case 'stay': return back();
@@ -366,6 +373,46 @@ function action(id){
   }
 }
 
+function floatListControls(){
+  const page=host.querySelector('.fr-payment-screen')||host.firstElementChild;
+  const body=page?.querySelector(':scope > :is(.np-body,.fr-operation-list,.fr-payment-actions-list,.fr-category-browser)');
+  if(!body||!page.querySelector(':scope > .fr-header'))return;
+  const preceding=[];
+  for(let node=body.previousElementSibling;node;node=node.previousElementSibling)preceding.push(node);
+  if(!preceding.every(node=>node.matches('.fr-header,.fr-month,.fr-toolbar,.fr-payment-actions-search,.fu-help-search,.fr-section-tabs,.fr-section-calendar')))return;
+  page.classList.add('fu-underlap');
+  body.classList.remove('fu-underlap-body');
+  page.style.setProperty('--fu-overlap',Math.max(0,body.getBoundingClientRect().top-page.getBoundingClientRect().top)+'px');
+  body.classList.add('fu-underlap-body');
+}
+function layoutScreen(){
+  for(const header of host.querySelectorAll('.fr-header')){
+    const title=header.querySelector('.fr-title');
+    if(!title)continue;
+    header.classList.remove('fu-title-room');
+    const group=title.closest('.fu-title-group')||title;
+    const style=getComputedStyle(title);
+    if(title.getBoundingClientRect().height<=parseFloat(style.lineHeight)+1)continue;
+    const back=header.querySelector('.fr-back');
+    const right=Array.from(header.children).find(el=>el!==group&&el!==back);
+    const headerBox=header.getBoundingClientRect();
+    const left=Math.ceil(back?back.getBoundingClientRect().right-headerBox.left+6:16);
+    const end=Math.ceil(right?headerBox.right-right.getBoundingClientRect().left+6:16);
+    const range=document.createRange();
+    range.selectNodeContents(title);
+    title.classList.add('fu-measure-title');
+    const width=range.getBoundingClientRect().width+(group!==title?46:0);
+    title.classList.remove('fu-measure-title');
+    if(width<=headerBox.width-left-end){
+      header.style.setProperty('--fu-title-left',left+'px');
+      header.style.setProperty('--fu-title-right',end+'px');
+      header.classList.add('fu-title-room');
+    }
+  }
+  floatListControls();
+}
+window.addEventListener('resize',layoutScreen);
+
 function render(){
   const oldMenu=host.querySelector('#fr-menu-panel');
   if(oldMenu)menuScroll=oldMenu.scrollTop;
@@ -375,14 +422,15 @@ function render(){
   switch(route){
     case 'home': markup=screen.home();break;
     case 'menu': markup=screen.menu(menuGroup);break;
+    case 'help': markup='';break;
     case 'amount':
       markup=screen.keypad(draft.kind,buffer,validAmount(buffer));
       break;
-    case 'category': markup=screen.categoryPicker(doc(),draft,query,showCreate,categoryRoot,money(draft.amount),previous);break;
+    case 'category': markup=screen.categoryPicker(doc(),{...draft,categoryId:pendingCategory},query,showCreate,categoryRoot,money(draft.amount),previous);break;
     case 'category-new':
       markup=screen.createCategoryScreen(categoryForm,doc().categories.filter(c=>c.type===draft.kind&&!c.parentId&&!c.archived&&!c.mergedInto));break;
-    case 'date': markup=screen.calendar(draft.kind,calendar.getFullYear(),calendar.getMonth(),draft.date,localDate());break;
-    case 'credit-date': markup=screen.calendar(draft.kind,calendar.getFullYear(),calendar.getMonth(),draft.creditDueDate,localDate(),'Срок погашения');break;
+    case 'date': markup=screen.calendar(draft.kind,calendar.getFullYear(),calendar.getMonth(),pendingDate,localDate());break;
+    case 'credit-date': markup=screen.calendar(draft.kind,calendar.getFullYear(),calendar.getMonth(),pendingDate,localDate(),'Срок погашения');break;
     case 'account':
       markup=screen.accounts(doc(),ledger.fact().balances,accountChoice,draft.kind,{...selectedAccountWarning(),primaryId:primaryAccount(doc())?.id});break;
     case 'review': {
@@ -390,7 +438,7 @@ function render(){
       const category=draft.kind==='expense'&&monthlyOverview(doc(),draft.date.slice(0,7)).categories.find(c=>c.id===rootId);
       const alreadyCounted=previous?.date.startsWith(draft.date.slice(0,7))?previous.allocations
         .filter(a=>rootCategory(doc(),a.categoryId)===rootId).reduce((sum,a)=>sum+a.amount,0):0;
-      const over=category&&category.spent-alreadyCounted+money(draft.amount)>category.plan;
+      const over=distributionConfigured(doc(),draft.date.slice(0,7))&&category&&monthlyOverview(doc(),draft.date.slice(0,7)).expected>0&&category.spent-alreadyCounted+money(draft.amount)>category.plan;
       markup=screen.review(doc(),draft,previous,isDirty(),error,busy,over?category.name:'',
         doc().accounts.some(a=>a.id===previous?.accountId&&a.archived),
         previous?.kind==='expense'&&!previous.cancelled&&!previous.referenceId&&refundRemaining(doc(),previous.id).some(x=>x.amount>0));
@@ -400,17 +448,17 @@ function render(){
     case 'operations': markup=operationsScreen();break;
     case 'filters': markup=filterScreen();break;
     case 'filter-picker':
-      markup=screen.heading('Категория')+
+      markup=screen.heading('Категории')+
         `<div class="fr-payment-actions-search"><input type="search" data-filter-search aria-label="Поиск категории" placeholder="Поиск"
         value="${screen.esc(filterQuery)}"></div><div class="fr-payment-actions-list">
-        <button type="button" class="fr-operation-picker-choice" data-filter-id="" aria-pressed="${!pendingFilters.category}">Все категории${screen.selectionMark(!pendingFilters.category)}</button>
-        <div data-filter-results>${filterCategories()}</div></div>`;
+        <button type="button" class="fr-operation-picker-choice" data-filter-id="" aria-pressed="${!pickedFilters.length}">Все категории${screen.selectionMark(!pickedFilters.length)}</button>
+        <div data-filter-results>${filterCategories()}</div></div>`+screen.primary('Сохранить','filter-category-save');
       break;
     case 'section': markup=sections.render();break;
     case 'unsaved': markup=screen.unsaved();break;
     case 'cancel': {
       const balance=ledger.fact().balances[previous.accountId]-previous.amount;
-      const message=previous.kind==='income'&&!previous.pending&&balance<0
+      const message=previous.accountId===null?'Операция перестанет учитываться в сводке.':previous.kind==='income'&&!previous.pending&&balance<0
         ? 'После отмены остаток на счёте станет отрицательным: '+screen.amountText(balance)+'.'
         : 'Остаток на счёте изменится.';
       markup=screen.heading('Отменить операцию?')+
@@ -420,13 +468,24 @@ function render(){
       markup=screen.heading('История изменений')+`<div class="np-body">${recordHistory(doc(),previous)}</div>`;break;
   }
   host.innerHTML=`<section class="fr-screen" data-screen="${route}" ${route==='section'?'data-section-page':''}>${markup}</section>`;
+  if(route==='help')openHelp('',false,host.firstElementChild,()=>move('menu'),layoutScreen);
   if(route==='section')sections.restore();
+  else if(route==='amount'&&!editing&&doc().operations.length){
+    const header=host.querySelector('.fr-header');
+    attachHelp(header?.querySelector('.fr-title'),'operations');
+  }
+  layoutScreen();
+  if(route==='section')sections.restoreScroll();
   if(route==='home')bindTrack(host.querySelector('.fr-track'),kind=>{
-    if(kind==='income')return openSection('income-choice');
+    const month=localDate().slice(0,7);
+    if(kind==='income'&&incomeOccurrences(doc(),month+'-01',monthEnd(month)).some(row=>row.remaining>0))return openSection('income-choice');
     start(kind);
   });
   if(route==='menu')host.querySelector('#fr-menu-panel').scrollTop=menuScroll;
+  if(route==='note')host.querySelector('textarea:not([readonly])')?.focus();
 }
+
+function focusChoice(key,value){host.querySelector(`[data-${key}="${CSS.escape(value)}"]`)?.focus({preventScroll:true});}
 
 function monthChange(delta){
   const date=calendar;
@@ -457,27 +516,36 @@ host.addEventListener('click',event=>{
   const button=event.target.closest('button');
   if(!button||button.disabled)return;
   const data=button.dataset;
-  if(data.filterId!==undefined){pendingFilters.category=data.filterId;return move('filters');}
+  if(data.help!==undefined)return openHelp(data.help,data.helpBrief!==undefined);
+  if(data.filterId!==undefined){
+    const id=data.filterId;
+    pickedFilters=!id?[]:pickedFilters.includes(id)?pickedFilters.filter(value=>value!==id):[...pickedFilters,id];
+    for(const choice of host.querySelectorAll('[data-filter-id]')){
+      const selected=choice.dataset.filterId?pickedFilters.includes(choice.dataset.filterId):!pickedFilters.length;
+      choice.setAttribute('aria-pressed',String(selected));
+      choice.querySelector('.fr-selection-mark')?.remove();
+      choice.insertAdjacentHTML('beforeend',screen.selectionMark(selected));
+    }
+    return;
+  }
   if(data.sectionAction)return sections.action(data.sectionAction,data.id);
   if(data.action)return action(data.action);
   if(data.edit)return edit(data.edit);
   if(data.key)return enterKey(data.key);
-  if(data.category)return selectedCategory(data.category);
-  if(data.parent){categoryForm.parentId=data.parent;return render();}
+  if(data.category){pendingCategory=data.category;const top=host.querySelector('[data-category-results]').scrollTop;render();host.querySelector('[data-category-results]').scrollTop=top;return focusChoice('category',data.category);}
+  if(data.parent){categoryForm.parentChoice=data.parent;render();return focusChoice('parent',data.parent);}
   if(data.month)return monthChange(Number(data.month));
   if(data.date){
-    if(route==='credit-date'){draft.creditDueDate=data.date;return showReview();}
-    draft.date=data.date;
-    return editing?showReview():fixedAccount?chooseAccount(fixedAccount):openAccountSelection();
+    pendingDate=data.date;render();return focusChoice('date',data.date);
   }
-  if(data.account&&route==='account'){accountChoice=data.account;return render();}
+  if(data.account!==undefined&&route==='account'){accountChoice=data.account||null;render();return focusChoice('account',data.account);}
   if(data.operation)return selectRecord(data.operation);
 });
 host.addEventListener('input',event=>{
   const input=event.target;
   if(input.hasAttribute('data-search-category')){
     query=input.value;
-    host.querySelector('[data-category-results]').innerHTML=screen.categoryRows(doc(),draft.kind,draft.categoryId,query,categoryRoot,draft.date,money(draft.amount),previous);
+    host.querySelector('[data-category-results]').innerHTML=screen.categoryRows(doc(),draft.kind,pendingCategory,query,categoryRoot,draft.date,money(draft.amount),previous);
   }
   if(input.hasAttribute('data-search-operation')){
     operationQuery=input.value;
@@ -486,7 +554,7 @@ host.addEventListener('input',event=>{
   if(route==='filters'&&input.name){
     pendingFilters[input.name]=input.value;
     if(input.name==='kind'){
-      if(input.value&&doc().categories.find(c=>c.id===pendingFilters.category)?.type!==input.value)delete pendingFilters.category;
+      if(input.value)pendingFilters.categories=(pendingFilters.categories||[]).filter(id=>doc().categories.some(c=>c.id===id&&c.type===input.value));
       render();host.querySelector('[data-select-trigger=kind]').focus({preventScroll:true});
     }
   }
@@ -498,7 +566,7 @@ host.addEventListener('input',event=>{
     categoryForm.name=input.value;
     host.querySelector('[data-action=save-category]').disabled=!input.value.trim();
   }
-  if(input.matches('textarea')){
+  if(input.matches('.fr-note-textarea')){
     note=input.value;
     const count=host.querySelector('.fr-note-count');
     count.textContent=note.length+' / 500';
@@ -524,7 +592,7 @@ host.addEventListener('touchend',event=>{
 
 document.addEventListener('keydown',event=>{
   if(!doc())return;
-  if(event.key==='Escape'){if(host.querySelector('dialog[open]'))return;event.preventDefault();return back();}
+  if(event.key==='Escape'){if(document.querySelector('dialog[open]'))return;event.preventDefault();return back();}
   if(!['amount','section'].includes(route)||!host.querySelector('.fr-keypad')||event.metaKey||event.ctrlKey||event.altKey||event.target.matches('input,textarea'))return;
   if(/^\d$/.test(event.key)||[',','.','Backspace'].includes(event.key)){
     event.preventDefault();enterKey(event.key==='Backspace'?'backspace':event.key==='.'?',':event.key);

@@ -7,12 +7,20 @@ export function animatePopover(panel,closing=false){
   const style=getComputedStyle(panel);
   const current={opacity:style.opacity,transform:style.transform};
   activeAnimations.get(panel)?.cancel();
-  const compact={opacity:0,transform:'scale(.87)'},full={opacity:1,transform:'scale(1)'};
+  const compact={opacity:0,transform:'translateY(5px) scale(.985)'},full={opacity:1,transform:'translateY(0) scale(1)'};
   const animation=panel.animate(closing?[current,compact]:[compact,full],{
     duration:closing?145:220,easing:closing?'ease-in':'cubic-bezier(.17,.86,.29,1)',fill:closing?'forwards':'none'
   });
   activeAnimations.set(panel,animation);
   return animation.finished.catch(()=>{});
+}
+export function closeAnimatedDialog(dialog){
+  if(!dialog.open||dialog.dataset.closing)return;
+  dialog.dataset.closing='true';
+  return animatePopover(dialog,true).then(()=>{
+    dialog.close();
+    delete dialog.dataset.closing;
+  });
 }
 export function pressFeedback(trigger){
   if(trigger&&!reducedMotion())trigger.animate([
@@ -37,7 +45,10 @@ export function bindSelectPopovers(host){
   },true);
   host.addEventListener('input',event=>{
     const field=event.target.closest('.fr-select-field');
-    if(field&&event.target.matches('select'))field.querySelector('[data-select-caption]').textContent=event.target.selectedOptions[0]?.textContent||'Выбрать';
+    if(field&&event.target.matches('select')){
+      const label=event.target.selectedOptions[0]?.textContent;
+      field.querySelector('[data-select-caption]').textContent=label&&label!=='Выбрать'?label:event.target.dataset.emptyLabel||'Выбрать';
+    }
   });
   host.addEventListener('click',event=>{
     const trigger=event.target.closest('[data-select-trigger]');
@@ -63,17 +74,34 @@ export function bindSelectPopovers(host){
       }
       if(trigger.isConnected)trigger.focus({preventScroll:true});
     };
+    let pending=options.find(option=>option.selected);
     for(const option of options){
       const button=document.createElement('button');
       button.type='button';
       const label=document.createElement('span');
       label.textContent=option.textContent;
+      label.title=option.textContent;
       button.append(label);
       button.insertAdjacentHTML('beforeend',selectionMark(option.selected));
       button.setAttribute('aria-pressed',String(option.selected));
-      button.onclick=()=>close(option);
+      button.onclick=()=>{
+        pending=option;
+        for(const rival of panel.querySelectorAll('button[aria-pressed]')){
+          const chosen=rival===button;
+          rival.setAttribute('aria-pressed',String(chosen));
+          rival.querySelector('.fr-selection-mark').outerHTML=selectionMark(chosen);
+        }
+        confirm.disabled=false;
+      };
       panel.append(button);
     }
+    const confirm=document.createElement('button');
+    confirm.type='button';
+    confirm.className='fu-select-confirm';
+    confirm.textContent='Далее';
+    confirm.disabled=!pending;
+    confirm.onclick=()=>close(pending);
+    panel.append(confirm);
     panel.onclick=event=>{if(event.target===panel)close();};
     panel.oncancel=event=>{event.preventDefault();close();};
     field.append(panel);trigger.setAttribute('aria-expanded','true');

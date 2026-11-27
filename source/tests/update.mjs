@@ -8,7 +8,7 @@ import {chromium} from 'playwright';
 import binary from '@sparticuz/chromium';
 import {scope,serveFixture,fixture} from './fixture-server.mjs';
 
-const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819',previous:'0a0fd28c7db8f2e50361b34ff4776f5a2d210cc6',test13:'33cc8ed7cd86482277fccf34c6487226ed05a853'};
+const oldReleases={legacy:'0097d580584a6456f9ec9453d613bb17a420bbd2',published:'8fd14ef2dd5951069b03022751cf076738da8819',previous:'0a0fd28c7db8f2e50361b34ff4776f5a2d210cc6',test14:'0487f7493bfa057d0923c0b457d551f0019f84cf'};
 const work=await mkdtemp(join(tmpdir(),'finrate-update-'));
 const results=process.env.FINRATE_UPDATE_SCREENSHOTS || 'verification/visual-patch';
 const readBuild=async path=>JSON.parse((await readFile(join(path,'sw.js'),'utf8')).match(/const build = (.*);/)[1]);
@@ -64,11 +64,16 @@ async function coherent(page,info){
 }
 async function record(page,n,category,account,{legacy=false}={}){
   await page.locator('[data-entry=income]').click();
-  if(!legacy)await button(page,'Другой доход').click();
+  if(!legacy&&await button(page,'Другой доход').isVisible()){
+    await button(page,'Другой доход').click();
+    await button(page,'Далее').click();
+  }
   for(const digit of String(n))await button(page,digit).click();
   await button(page,'Далее').click();
   await button(page,category).click();
+  if(!legacy)await page.locator('[data-action=category-next]').click();
   await button(page,'Сегодня').click();
+  if(!legacy)await page.locator('[data-action=date-next]').click();
   await page.locator('[data-account]').filter({hasText:account}).click();
   if(!legacy)await page.locator('[data-action=account-next]').click();
   await button(page,'Сохранить').click();
@@ -85,46 +90,36 @@ try{
   await page.getByText('0 ₽',{exact:true}).first().waitFor();
   await shot(page,'V12-clean-summary');
   const empty=await fixture(page,url);
-  assert.deepEqual([empty.accounts,empty.categories,empty.operations,empty.events,empty.goals,empty.plans,empty.payments],[[],[],[],[],[],[],[]]);
+  assert.deepEqual([empty.accounts,empty.operations,empty.events,empty.goals,empty.plans,empty.payments],[[],[],[],[],[],[]]);
+  assert.equal(empty.categories.length,11);
   assert.equal(empty.total,0);
 
   await page.goto(url);
   await button(page,'Открыть меню').click();
   await page.getByText('Учёт',{exact:true}).click();
   await button(page,'Счета и кошельки').click();
-  await page.getByText('Счетов пока нет.').waitFor();
+  await page.locator('[data-section-action=account-new]').waitFor();
   await shot(page,'V12-clean-accounts');
-  await button(page,'Назад').click();
-  await button(page,'Категории').click();
-  await button(page,'Создать категорию').click();
-  await button(page,'Доходная').click();
-  await page.getByRole('textbox',{name:'Название'}).fill('Первый доход');
-  await button(page,'Сохранить').click();
-  await page.getByText('Первый доход',{exact:true}).waitFor();
-  await button(page,'Назад').click();
-  await button(page,'Закрыть меню').click();
-  await page.locator('[data-entry=income]').click();await button(page,'Другой доход').click();
-  await button(page,'3').click();await button(page,'2').click();
-  await button(page,'Далее').click();await button(page,'Первый доход').click();await button(page,'Сегодня').click();
-  await button(page,'Добавить счёт').click();
+  await page.locator('[data-section-action=account-new]').click();
+  await page.locator('[data-section-action=account-type-next]').click();
   await page.getByRole('textbox',{name:'Название'}).fill('Первый счёт');
   await button(page,'Сохранить').click();
-  await page.locator('[data-action=account-next]').click();
-  await page.getByRole('button',{name:'Выбрать счёт операции'}).waitFor();
-  await button(page,'Сохранить').click();
+  await page.getByRole('heading',{name:'Первый счёт',exact:true}).waitFor();
+  await page.goto(url);
+  await record(page,32,'Зарплата','Первый счёт');
   await button(page,'Сводка').waitFor();
   const stored=await fixture(page,url);
   assert.equal(stored.operations[0].amount,3200);
   assert.equal(stored.accounts.length,1);
-  assert.equal(stored.categories.length,1);
+  assert.equal(stored.categories.length,11);
   assert.equal(stored.datasetId,empty.datasetId);
   await page.goto(url);await coherent(page,A);await noOffer(page);
   await update(page);await noOffer(page);
 
   const other=await context.newPage();
   await other.goto(url);await coherent(other,A);
-  await page.locator('[data-entry=income]').click();await button(page,'Другой доход').click();await button(page,'7').click();
-  await other.locator('[data-entry=income]').click();await button(other,'Другой доход').click();await button(other,'8').click();
+  await page.locator('[data-entry=income]').click();await button(page,'7').click();
+  await other.locator('[data-entry=income]').click();await button(other,'8').click();
 
   served='B';incomplete=true;
   await update(page);
@@ -170,9 +165,9 @@ try{
   assert.match(await page.locator('[data-operation]').innerText(),/32/);
   await context.setOffline(false);
   await page.goto(url);
-  await record(page,5,'Первый доход','Первый счёт');
+  await record(page,5,'Зарплата','Первый счёт');
   await button(page,'Сводка').waitFor();
-  await record(other,6,'Первый доход','Первый счёт');
+  await record(other,6,'Зарплата','Первый счёт');
   await other.getByRole('alert').filter({hasText:'Данные изменились в другой вкладке.'}).waitFor();
   const after=await fixture(page,url);
   assert.deepEqual(after.operations.map(o=>o.amount),[3200,500]);
@@ -226,9 +221,10 @@ try{
   await goalButton('Обновить').click();
   await goalsPage.getByText('Обновлено до '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
   await coherent(goalsPage,A);
-  await goalButton('Сводка').click();
+  await goalButton('Открыть меню').click();
+  await goalsPage.getByText('Планы и отчёты',{exact:true}).click();
+  await goalButton('Накопления').click();
   await goalButton('Ещё').click();
-  await goalsPage.locator('.fr-summary-dialog [data-section-action=savings]').click();
   await goalButton('История накоплений').click();
   for(const [id,status,amount] of [['holiday','Накоплено и потрачено','50 000'],['notebook','Накоплено','10 000']]){
     await goalsPage.locator(`[data-section-action=closed-goal][data-id=${id}]`).click();
@@ -242,14 +238,14 @@ try{
   await upgradeGoals.close();
   console.log('PASS published 0a0fd28: closed goals from test.3 open after manual update, with original snapshots');
 
-  served='test13';
+  served='test14';
   const upgradeCredit=await browser.newContext(options);
   const creditPage=await upgradeCredit.newPage();
   await creditPage.clock.setFixedTime(new Date('2026-11-25T12:00:00Z'));
   const priorCredit=await fixture(creditPage,url,'visual');
   await creditPage.goto(url);
   await ready(creditPage);
-  assert.equal(await root(creditPage).getAttribute('data-release'),'0.2.0-test.13');
+  assert.equal(await root(creditPage).getAttribute('data-release'),'0.2.0-test.14');
   served='A';
   await update(creditPage);
   await creditPage.getByText('Доступна версия '+A.release+' · '+A.id.slice(0,8),{exact:true}).waitFor();
@@ -270,7 +266,7 @@ try{
     await button(creditPage,'Назад').click();
   }
   await upgradeCredit.close();
-  console.log('PASS test.13 upgrade: balances, credit limits, debt and own funds are preserved');
+  console.log('PASS test.14 upgrade: balances, credit limits, debt and own funds are preserved');
 
   for(const ownData of [false,true]){
     served='legacy';

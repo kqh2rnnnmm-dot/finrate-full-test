@@ -17,22 +17,25 @@ export const actionButton = (label,action,id='') => `<button type="button" class
 export const tabs = (items,current) => `<div class="fr-section-tabs">${items.map(([id,label])=>`<button type="button" data-section-action="tab" data-id="${id}" aria-pressed="${id===current}">${esc(label).replaceAll('\n','<br>')}</button>`).join('')}</div>`;
 const decimal = value => String(value ?? '').replace('.',',');
 const option = (value,label,selected) => `<option value="${esc(value)}" ${String(selected)===String(value)?'selected':''}>${esc(label)}</option>`;
-export function field({key,label,type='text',options,placeholder='',required=true,maxlength=100,min,max,hideLabel=false},value) {
+export function field({key,label,type='text',options,placeholder=label,required=true,maxlength=100,min,max,hideLabel=false},value) {
   if(type==='account-picker'){
     const account=options.find(([id])=>id===value&&id);
     const [id,name,mark]=account||[];
-    return `<div class="fr-section-field"><span>${esc(label)}</span><button type="button" class="fr-form-account" data-section-action="form-account" aria-label="Счёт: ${esc(name||'Выбрать счёт')}">
+    return `<div class="fr-section-field"><button type="button" class="fr-form-account" data-section-action="form-account" aria-label="Счёт: ${esc(name||'Выбрать счёт')}">
       <span class="fr-form-account-copy"><strong>${esc(name||'Выбрать счёт')}</strong>${id?mark:''}</span></button></div>`;
   }
-  if(type==='category-picker')return `<div class="fr-section-field"><span>${esc(label)}</span>
-    <button type="button" class="fr-field-trigger" data-section-action="form-category-open">${esc(options.find(([id])=>id===value)?.[1]||'Выбрать категорию')}</button></div>`;
-  if(options)return `<div class="fr-section-field fr-select-field"><span>${esc(label)}</span>
-    <button type="button" class="fr-field-trigger" data-select-trigger="${esc(key)}" aria-label="${esc(label)}" aria-haspopup="dialog" aria-expanded="false"><span data-select-caption>${esc(options.find(([id])=>String(id)===String(value))?.[1]||options[0]?.[1]||'Выбрать')}</span>${icon('down')}</button>
-    <select tabindex="-1" aria-hidden="true" aria-label="${esc(label)}" name="${esc(key)}" ${required?'required':''}>${options.map(([id,label])=>option(id,label,value)).join('')}</select></div>`;
+  if(type==='category-picker')return `<div class="fr-section-field">
+    <button type="button" class="fr-field-trigger" data-section-action="form-category-open" aria-label="${esc(label)}">${esc(options.find(([id])=>id===value)?.[1]||'Выбрать категорию')}</button></div>`;
+  if(options){
+    const caption=options.find(([id])=>String(id)===String(value))?.[1];
+    return `<div class="fr-section-field fr-select-field">
+    <button type="button" class="fr-field-trigger" data-select-trigger="${esc(key)}" aria-label="${esc(label)}" aria-haspopup="dialog" aria-expanded="false"><span data-select-caption>${esc(caption&&caption!=='Выбрать'?caption:label)}</span>${icon('down')}</button>
+    <select tabindex="-1" aria-hidden="true" aria-label="${esc(label)}" name="${esc(key)}" data-empty-label="${esc(label)}" ${required?'required':''}>${options.map(([id,label])=>option(id,label,value)).join('')}</select></div>`;
+  }
   const control = type==='checkbox'
-      ? `<input type="checkbox" name="${key}" ${value?'checked':''}>`
-      : `<input type="${type==='money'?'text':type}" ${type==='money'?'inputmode="decimal" data-decimal':''} name="${key}" ${type==='file'?'accept=".json,application/json"':`value="${esc(type==='money'?decimal(value):value)}"`} ${min?`min="${esc(min)}"`:''} ${max?`max="${esc(max)}"`:''} placeholder="${esc(placeholder)}" maxlength="${maxlength}" ${required?'required':''} autocomplete="off">`;
-  return `<label class="fr-section-field ${type==='checkbox'?'fr-check-field':''}"><span ${hideLabel?'class="fr-visually-hidden"':''}>${esc(label)}</span>${control}</label>`;
+      ? `<input type="checkbox" aria-label="${esc(label)}" name="${key}" ${value?'checked':''}>`
+      : `<input type="${type==='money'?'text':type}" ${type==='money'?'inputmode="decimal" data-decimal':''} name="${key}" ${type==='file'?'accept=".json,application/json"':`value="${esc(type==='money'?decimal(value):value)}"`} ${min?`min="${esc(min)}"`:''} ${max?`max="${esc(max)}"`:''} aria-label="${esc(label)}" placeholder="${esc(placeholder)}" maxlength="${maxlength}" ${required?'required':''} autocomplete="off">`;
+  return `<label class="fr-section-field fu-field ${type==='checkbox'?'fr-check-field':''}">${!hideLabel&&['date','file'].includes(type)?`<span class="fu-field-caption">${esc(label)}</span>`:type==='checkbox'?`<span>${esc(label)}</span>`:''}${control}</label>`;
 }
 
 export function formScreen({title,fields,values,error,busy,submitLabel='Сохранить',inside='',insideBefore='',danger=false}) {
@@ -50,30 +53,41 @@ export function amountOverview(value,{label='',caption=''}={}) {
   return `<div class="fr-amount-overview">${label?small(label):''}${moneyLabel(value)}${caption?small(caption):''}</div>`;
 }
 
-export function summary(month, budget, period) {
-  const result = amountText(budget.result);
-  return heading('Сводка','',`<button type="button" class="fr-category-new fr-summary-settings" data-section-action="budget-settings" aria-label="Настройки сводки">${icon('gear')}</button>`)+monthControl(month)+body(
+export function summary(month, budget, {familiar,accounts,planned,distributed,goals,hasSavings,includeSavings,hasPayments}) {
+  const result = amountText(budget.monthResult);
+  return heading('Сводка')+monthControl(month)+body(
     `<div class="fr-summary-card">
-      <div class="fr-month-result"><strong class="np-money ${result.length>11?'fr-result-long':''}" aria-label="Результат месяца ${esc(result)}">${result}</strong>
-        <button type="button" data-action="month-result-info" aria-label="Как считается результат месяца" aria-haspopup="dialog">${icon('info')}</button>
-      </div>
-      <button type="button" class="fr-summary-more" data-section-action="summary-more" aria-haspopup="dialog">Ещё</button>
+      <button type="button" class="fr-month-result" data-action="month-result-info" aria-haspopup="dialog"><strong class="np-money ${result.length>11?'fr-result-long':''}" data-fit-money aria-label="Результат месяца ${esc(result)}">${result}</strong>
+      </button>
+      <button type="button" class="fr-summary-more" data-section-action="summary-more">Ещё</button>
     </div>
     <dialog class="fr-info-dialog" aria-label="Результат месяца"><div class="fr-info-panel" tabindex="-1" autofocus><strong>Результат месяца</strong>
-      <p>Все доходы за месяц минус все расходы за месяц. ${budget.excludeSavings?'Из результата также вычтены накопления за этот месяц.':'Накопления включены в результат.'}</p></div></dialog>
-    <dialog class="fr-summary-dialog" aria-labelledby="fr-summary-period"><div class="fr-summary-menu">
-      <h2 id="fr-summary-period" tabindex="-1" autofocus>${esc(period)}</h2>
-      ${link('Получено','received','',moneyLabel(budget.income))}
-      <div class="fr-summary-breakdown">${pair('Ожидалось по плану',budget.expected)}${pair('Получено по плану',budget.planned)}${pair('Дополнительный доход',budget.additional)}</div>
-      ${link('Расходы','summary-expenses','',moneyLabel(budget.expense))}
-      ${link('Накопления','savings','',moneyLabel(budget.reservedForMonth))}
-      ${link('Планы доходов','summary-plans')}${link('Платежи','summary-payments')}
-      <div class="fr-summary-available">${link('Доступно к тратам','summary-accounts','',moneyLabel(budget.available))}${small('Счета и кошельки · сейчас')}</div>
-      ${actionButton('Закрыть','summary-more-close')}
-    </div></dialog>`+
-    budget.categories.filter(c=>!c.savings).map(c=>`<div class="fr-summary-category">${link(c.name,'share',c.id,moneyLabel(c.spent))}
-      ${budgetBar(c.plan,c.spent,c.funded)+small('План '+amountText(c.plan))}</div>`).join('')
+      <p>Все доходы за месяц минус все расходы за месяц. Остатки счетов и ожидаемые поступления считаются отдельно.</p>
+      ${hasSavings?`<button type="button" class="fr-display-toggle" role="switch" aria-checked="${includeSavings}" data-section-action="toggle-savings">Включать накопления в доступную сумму<span aria-hidden="true"></span></button><p class="fr-create-error" role="status"></p>`:''}</div></dialog>
+`+
+    (!familiar?panel('<div class="fu-intro"><p>Здесь виден результат месяца и на что ушли деньги.</p><button type="button" class="fu-help-link" data-help="summary">Как это работает</button></div>'):'')+
+    (!budget.hasFacts?empty('В этом месяце операций пока нет.'): '')+
+    (budget.hasFacts||distributed?'<h2 class="fr-section-title">Расходы по категориям</h2>':'')+
+    (budget.categories.filter(c=>!c.savings&&(c.spent>0||distributed&&c.bps>0)).map(c=>`<div class="fr-summary-category">${link(c.name,distributed?'share':'category-ops',c.id,moneyLabel(c.spent))}
+      ${distributed&&(c.bps>0||c.spent>0)?budgetBar(c.plan,c.spent,c.funded)+small('План '+amountText(c.plan)):''}</div>`).join('')||(budget.hasFacts||distributed?empty('В этом месяце расходов пока нет.') : ''))
   );
+}
+
+export function summaryDetails(budget,period,{accounts,planned,goals,hasPayments}){
+  const groups=[
+    budget.hasFacts?link('Фактические доходы','received','',moneyLabel(budget.income))+
+      link('Фактические расходы','summary-expenses','',moneyLabel(budget.expense)):'',
+    accounts?link('Учтённые остатки','summary-accounts','',moneyLabel(budget.actual))+small('На счетах сейчас')+
+      (budget.available!==budget.actual?pair('Доступно к тратам',budget.available):''):'',
+    planned?link('Планы доходов','summary-plans','',moneyLabel(budget.expected))+
+      pair('Получено по плану',budget.receivedAgainstPlan)+pair('Осталось получить',budget.remaining)+
+      pair('Дополнительный доход',budget.additional):'',
+    goals?link('Накопления','savings','',moneyLabel(budget.reservedForMonth)):'',
+    hasPayments?link('Платежи','summary-payments'):''
+  ].filter(Boolean);
+  return heading('Подробнее о месяце')+body(`<div class="fr-summary-details"><h2>${esc(period)}</h2>${
+    groups.map(group=>`<section class="fr-summary-group">${group}</section>`).join('')||
+    empty('В этом месяце операций пока нет.')}</div>`);
 }
 
 export function goalProgress(goal) {
@@ -108,7 +122,7 @@ export function shareScreen(state,categories,plan,step,operations) {
       `<div class="np-body fr-share-history" data-section-scroll>${totals}${panels}${error}
         <h2 class="fr-section-title">Операции за месяц</h2>${operations}</div><div class="fr-share-save">${save}</div>`;
   }
-  return top+totals+body(panels)+error+save;
+  return top+totals+(state.page==='distribution'?monthControl(state.month):'')+body((state.page==='distribution'&&!plan?empty('На этот месяц нет ожидаемых поступлений. Плановые суммы появятся, когда вы добавите план дохода.'):'')+panels)+error+save;
 }
 
 export function goalCard(goal) {
@@ -168,7 +182,7 @@ export function recordHistory(doc,operation) {
   const describe = (key,op) => ({
     amount:()=>amountText(op.amount),
     date:()=>dateText(op.date),
-    accountId:()=>doc.accounts.find(a=>a.id===op.accountId)?.name,
+    accountId:()=>doc.accounts.find(a=>a.id===op.accountId)?.name||(op.accountId===null?'Без счёта':''),
     toAccountId:()=>doc.accounts.find(a=>a.id===op.toAccountId)?.name,
     categoryId:()=>op.allocations.map(a=>categoryLabel(doc,a.categoryId).name).join(', '),
     note:()=>op.note,
@@ -190,7 +204,7 @@ export function recordRows(doc,rows,query='',filters={}) {
   return operationRows(doc,rows.filter(o=>
     (!filters.from || o.date>=filters.from) && (!filters.to || o.date<=filters.to) &&
     (!filters.kind || o.kind===filters.kind) && (!filters.account || [o.accountId,o.toAccountId].includes(filters.account)) &&
-    (!filters.category || o.allocations.some(a=>a.categoryId===filters.category ||
-      doc.categories.find(c=>c.id===a.categoryId)?.parentId===filters.category))
+    (!filters.categories?.length || o.allocations.some(a=>filters.categories.includes(a.categoryId) ||
+      filters.categories.includes(doc.categories.find(c=>c.id===a.categoryId)?.parentId)))
   ),query);
 }

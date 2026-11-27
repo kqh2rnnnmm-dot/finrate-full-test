@@ -105,7 +105,10 @@ try{
   await ledger.boot();
   const mode=new URLSearchParams(location.search).get('mode');
   const seed={regression:basic,visual,audit,patch04,categoryHistory}[mode];
-  if(seed)await ledger.mutate('test.fixture',seed);
+  if(seed)await ledger.mutate('test.fixture',d=>{
+    if(d.accounts.length===0&&d.operations.length===0&&d.events.length===0)d.categories=[];
+    seed(d);
+  });
   const d=ledger.document();
   document.body.textContent=JSON.stringify({
     datasetId:d.datasetId,revision:d.revision,accounts:d.accounts,categories:d.categories,operations:d.operations,events:d.events,

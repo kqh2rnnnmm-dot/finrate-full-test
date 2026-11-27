@@ -68,7 +68,7 @@ export function archive(d,collection,id){if(!['accounts','categories'].includes(
 }
 const kinds=['expense','income','transfer','adjustment','loan-out','loan-in','repayment-out','repayment-in','refund'];
 export function postings(op){
-  if(op.cancelled||op.pending)return [];
+  if(op.cancelled||op.pending||op.accountId===null)return [];
   const a=op.amount;
   switch(op.kind){
     case 'transfer':return op.stage==='waiting'||op.stage==='returned'?[]:op.transferTarget==='external'||op.stage==='debited'?[[op.accountId,-a]]:[[op.accountId,-a],[op.toAccountId,a]];
@@ -92,7 +92,7 @@ function validateOperation(d,o,historical=false){
 
   text(o.id);date(o.date);if(!kinds.includes(o.kind))fail('OPERATION_KIND');integer(o.amount);
   if(o.kind==='adjustment'?o.amount===0:o.amount<=0)fail('AMOUNT');
-  const account=d.accounts.find(a=>a.id===o.accountId);if(!account||(!historical&&account.archived))fail('ACCOUNT');
+  const account=d.accounts.find(a=>a.id===o.accountId);if ((!account && !(o.accountId===null && ['income','expense','refund'].includes(o.kind))) || (!historical && account?.archived)) fail('ACCOUNT');
   const external=o.kind==='transfer'&&o.transferTarget==='external';
   if(o.transferTarget!==undefined&&(!['own','external'].includes(o.transferTarget)||o.kind!=='transfer'))fail('TRANSFER');
   if(external){if(d.schema<4||o.toAccountId!==null)fail('TRANSFER');text(o.recipient);if(o.stage&&o.stage!=='received')fail('TRANSFER');}
@@ -106,7 +106,7 @@ function validateOperation(d,o,historical=false){
   }else if(o.allocations.length)fail('ALLOCATIONS');
   if(typeof o.note!=='string'||o.note.length>500)fail('SCHEMA');
   if(o.kind==='refund'){
-    const original=d.operations.find(x=>x.id===o.referenceId&&x.kind==='expense');if(!original||(!o.cancelled&&original.cancelled)||o.date<original.date)fail('REFUND');
+    const original=d.operations.find(x=>x.id===o.referenceId&&x.kind==='expense');if(!original||(o.accountId===null&&original.accountId!==null)||(!o.cancelled&&original.cancelled)||o.date<original.date)fail('REFUND');
     for(const x of o.allocations){const max=original.allocations.find(a=>a.categoryId===x.categoryId)?.amount||0;
       const prior=d.operations.filter(a=>a.kind==='refund'&&!a.cancelled&&a.referenceId===original.id&&a.id!==o.id).flatMap(a=>a.allocations).filter(a=>a.categoryId===x.categoryId).reduce((s,a)=>addSafe(s,a.amount),0);
       if(!o.cancelled&&addSafe(prior,x.amount)>max)fail('REFUND');}
