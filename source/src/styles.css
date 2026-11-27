@@ -149,10 +149,10 @@
 #finrate .fr-review-money{min-height:64px;padding:10px 0}
 #finrate .fr-note-link{min-height:44px;font-size:17px;color:var(--palette-12)}
 #finrate .fr-screen:has(.fr-operation-list){position:relative;background:var(--bg)}
-#finrate .fr-screen:has(.fr-operation-list)>.fr-header{position:absolute;inset:0 0 auto;height:72px;z-index:3;background:var(--bg);border:0;box-shadow:none}
+#finrate .fr-screen:has(.fr-operation-list)>.fr-header{position:absolute;inset:0 0 auto;height:72px;z-index:3;background:transparent;border:0;box-shadow:none}
 #finrate .fr-screen:has(.fr-operation-list)>.fr-toolbar{position:absolute;top:80px;right:24px;z-index:4;display:block;min-height:0;width:auto;padding:0;margin:0;background:transparent;pointer-events:none}
 #finrate .fr-toolbar .fr-filter-button{display:flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border:0;border-radius:16px;background:var(--panel);color:var(--ink);box-shadow:0 6px 18px var(--palette-19);font-size:16px;font-weight:600;line-height:1.4;pointer-events:auto}
-#finrate .fr-operation-list{position:absolute;inset:72px 0 0;min-height:0;padding:60px 24px 24px;overflow-y:auto;overflow-x:hidden;background:var(--bg);scroll-padding-top:60px;scrollbar-width:none}
+#finrate .fr-operation-list{position:absolute;inset:72px 0 0;min-height:0;padding:60px 24px 24px;overflow-y:auto;overflow-x:hidden;background:transparent;scroll-padding-top:60px;scrollbar-width:none}
 #finrate .fr-operation-list::-webkit-scrollbar{display:none}
 #finrate .fr-toolbar .fr-filter-button:active, #finrate .fr-operation-actions .fr-history-link:active{background:var(--soft)}
 #finrate .fr-screen:has(.fr-payment-actions-list) .fr-title{color:var(--ink)}
@@ -378,7 +378,7 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-screen[data-screen=operations]>.fr-operation-list{position:relative;inset:auto;padding-top:8px;scroll-padding-top:0}
 #finrate .fr-filter-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 24px 20px}
 #finrate .fr-filter-actions button{margin:0;height:48px}
-#finrate .fr-filters-body .fr-section-secondary{margin:0;text-align:left;font-weight:400;border:1px solid var(--line)}
+#finrate .fr-filters-body .fr-section-secondary{margin:0;text-align:left;font-weight:400;border:0}
 #finrate .fr-filters-body .fr-section-secondary:disabled{color:var(--dim)}
 #finrate .fr-filters-body .fr-section-field{margin-bottom:9px}
 #finrate .fr-payment-tab-island{flex:none;margin:4px 24px 12px;padding:4px;background:var(--soft);border-radius:18px}
@@ -597,16 +597,6 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate [data-section-page] .fr-month-result>.np-money{font-size:clamp(28px,7.6vw,34px);line-height:1.12;white-space:normal;overflow-wrap:anywhere}
 #finrate [data-section-page] .fr-month-result>.fr-result-long{font-size:clamp(17px,5.4vw,24px)}
 #finrate .fr-summary-more{min-width:48px;min-height:44px;padding:0 9px;border:0;border-radius:13px;background:transparent;color:var(--ink);font:inherit;font-weight:600}
-#finrate .fr-summary-dialog{width:min(360px,calc(100% - 32px));max-height:calc(100% - 48px);padding:0;border:0;border-radius:23px;background:var(--panel);color:var(--ink);overscroll-behavior:contain}
-#finrate .fr-summary-dialog::backdrop{background:#0007;touch-action:none}
-#finrate .fr-summary-menu{padding:16px}
-#finrate .fr-summary-menu h2{margin:0 0 8px;outline:none}
-#finrate .fr-summary-menu .np-link{padding:8px 4px;min-height:44px;border-radius:12px}
-#finrate .fr-summary-menu .fr-section-name{white-space:normal;overflow-wrap:anywhere}
-#finrate .fr-summary-breakdown .np-row{color:var(--dim);gap:8px;margin:0;padding:5px 4px;font-size:14px}
-#finrate .fr-summary-available{margin-top:8px;border-top:1px solid var(--line)}
-#finrate .fr-summary-available .fr-muted{margin:0 4px 10px}
-#finrate .fr-summary-menu .fr-section-secondary{border-radius:14px;background:var(--soft)}
 #finrate .fr-info-dialog{position:fixed;inset:auto;margin:0;width:min(320px,calc(100% - 40px));padding:0;border:0;border-radius:20px;background:var(--panel);color:var(--ink)}
 #finrate .fr-info-dialog::backdrop{background:#0004;touch-action:none}
 #finrate .fr-info-panel{padding:20px;outline:none}
@@ -719,7 +709,6 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-account-popover{transform-origin:top right}
 #finrate .fr-account-popover-more{transform-origin:bottom right}
 #finrate .fr-operation-create-menu{transform-origin:top right}
-#finrate .fr-summary-dialog{transform-origin:bottom center}
 
 /* Shared menu typography and selection controls. */
 #finrate .fr-app {
@@ -798,8 +787,8 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 /* Keep touch feedback on the painted element. */
 #finrate :is(button,summary,a,input[type=checkbox]){-webkit-tap-highlight-color:transparent}
 #finrate :is(.np-link,.fr-income-plan-row,.fr-category-group-main,.fr-typed-account:not(.fr-main-account-row),.fr-summary-settings,.fr-category-fold,.fr-account-info,.fr-operation-create-menu button,.fr-account-popover-actions button):active{color:var(--palette-12);background-color:transparent}
-#finrate :is(.fr-primary,.fr-filter-button,.fr-main-account-row,.fr-selection-choice,.fr-goal-preview,.fr-field-trigger,.fr-action-islands button,.fr-menu,.fr-summary-menu .fr-section-secondary):not(:disabled){transition:filter 140ms ease}
-#finrate :is(.fr-primary,.fr-filter-button,.fr-main-account-row,.fr-selection-choice,.fr-goal-preview,.fr-field-trigger,.fr-action-islands button,.fr-menu,.fr-summary-menu .fr-section-secondary):not(:disabled):active{filter:brightness(.91)}
+#finrate :is(.fr-primary,.fr-filter-button,.fr-main-account-row,.fr-selection-choice,.fr-goal-preview,.fr-field-trigger,.fr-action-islands button,.fr-menu):not(:disabled){transition:filter 140ms ease}
+#finrate :is(.fr-primary,.fr-filter-button,.fr-main-account-row,.fr-selection-choice,.fr-goal-preview,.fr-field-trigger,.fr-action-islands button,.fr-menu):not(:disabled):active{filter:brightness(.91)}
 #finrate input[type=checkbox]{
   appearance:none;-webkit-appearance:none;
   width:21px;height:21px;margin:0;flex:none;border:1.5px solid var(--dim);border-radius:5px;background:transparent;
@@ -845,3 +834,305 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
   #finrate .fr-track-glow::before,#finrate .fr-track-glow::after,#finrate .fr-track .fr-knob,
   #finrate .fr-track .fr-knob::before,#finrate .fr-track .fr-knob::after{transition:none!important}
 }
+
+/* First-use explanations share the palette and controls of the existing app. */
+.fu-intro p {margin:0 0 16px;line-height:1.5}
+.fu-help-trigger {width:44px;height:44px;border:0;background:none;color:var(--palette-6);display:grid;place-items:center;position:absolute;right:0;top:50%;transform:translateY(-50%);border-radius:16px}
+.fu-no-account {margin-top:12px}
+.fu-help-dialog {font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--palette-3);background:var(--palette-1);width:min(calc(100% - 24px),470px);max-height:min(82dvh,680px);border:0;border-radius:25px;padding:0;overflow:hidden}
+.fu-help-dialog[open] {display:flex;flex-direction:column}
+.fu-help-dialog::backdrop {background:#0b13226b}
+.fu-help-head {display:flex;align-items:center;justify-content:space-between;gap:2px;padding:9px 8px 9px 16px}
+.fu-help-head h2 {font-size:clamp(16px,4.5vw,20px);line-height:1.2;margin:0;flex:1;text-align:left}
+.fu-help-head button {border:0;border-radius:50%;background:none;color:inherit;min-width:44px;height:44px;display:grid;place-items:center;font:inherit;font-size:27px}
+.fu-help-head [data-fu-close] {margin-left:auto}
+.fu-help-body {overflow:auto;overscroll-behavior:contain;padding:0 16px 16px;line-height:1.48}
+.fu-help-body h3,.fu-help-body h4 {margin:14px 0 6px}
+.fu-help-body p {margin:8px 0 12px}
+.fu-help-body li+li {margin-top:9px}
+.fu-help-body .np-link {width:100%;min-height:52px;margin-top:6px;padding:10px 14px;display:block;border:0;border-radius:15px;text-align:left;color:inherit;background:var(--palette-2);font:inherit}
+.fu-help-body .np-link small {display:block;margin-top:3px;color:var(--palette-6)}
+.fu-help-body .fr-section-panel {padding:12px 14px;border-radius:15px;background:var(--palette-2)}
+#finrate .fr-month-result {row-gap:4px}
+#finrate .fr-month-result .fr-muted {font-size:13px}
+.fu-help-search {padding:0 16px 8px}
+.fu-help-search input {box-sizing:border-box;width:100%;padding:12px;border:0;border-radius:14px;background:var(--palette-2);color:inherit;font:inherit}
+.fu-select-confirm {color:var(--palette-12);font-weight:650}
+.fu-select-confirm:disabled {opacity:.45}
+
+#finrate .fu-help-trigger {right:24px;z-index:1}
+#finrate .fr-header:has(.fr-category-new) .fu-help-paired {right:64px;width:32px}
+#finrate .fr-header:has(.fu-help-paired):has(.fr-category-new) .fr-title {margin-right:19px;font-size:clamp(16px,4.5vw,20px)}
+#finrate .fr-action-islands .fr-section-secondary {pointer-events:auto;margin:0;min-height:44px}
+#finrate .fr-screen[data-screen=date] .fr-calendar {overflow:auto}
+#finrate .fr-calendar-today[aria-pressed=true] {font-weight:700}
+#finrate .fr-screen[data-screen=category] .fr-operation-create-menu {z-index:4}
+#finrate .fr-select-popover .fu-select-confirm {justify-content:center;background:var(--palette-11);margin-top:4px;color:var(--palette-12)}
+#finrate .fr-screen:has(.fu-intro) .fr-action-islands .fr-primary {white-space:normal}
+
+/* Screen titles and contextual help share the center of the header. */
+#finrate .fr-screen .fr-header .fr-title {
+  position:relative; margin:0; font-size:clamp(22px,6.4vw,26px);
+  font-weight:650; line-height:1.15; overflow-wrap:anywhere;
+}
+#finrate .fr-header:has(.fu-help-trigger) {padding-inline:clamp(64px,20vw,92px)}
+#finrate .fr-header .fr-title > .fu-help-trigger {
+  inset:-17px auto auto calc(100% - 4px); width:44px; height:44px;
+  transform:none; color:var(--dim);
+}
+#finrate .fu-help-trigger svg {width:17px;height:17px}
+#finrate .fu-help-link,.fu-help-dialog .fu-help-link {
+  min-height:44px; padding:4px 0; border:0; background:none;
+  color:var(--palette-12); font:inherit; font-weight:600;
+}
+.fu-help-dialog:not(.fu-help-compact){height:min(82dvh,680px)}
+.fu-help-search .fr-visually-hidden {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#finrate .fr-calendar {padding-block:8px 4px;overscroll-behavior:contain}
+#finrate .fr-calendar .fr-month {margin-bottom:8px}
+#finrate .fr-calendar .fr-week span {padding-bottom:6px}
+#finrate .fr-calendar-today {margin-top:8px}
+#finrate .fr-calendar + .fr-primary {margin-block:8px 12px}
+#finrate .fr-category-browser .np-body {padding-block:8px 8px;scroll-padding:8px}
+#finrate .fr-category-search {position:relative;inset:auto;margin:4px 24px 0}
+#finrate .fr-category-carousel {right:104px}
+#finrate .fr-category-carousel:not(.fu-carousel-move) :is(.fr-category-carousel-rail, .fr-category-carousel-highlight, [data-category-slide]) {transition:none}
+#finrate .fu-category-more {position:absolute;inset:auto 24px var(--category-island-gap) auto;z-index:2;width:70px;height:var(--category-island-height);margin:0;padding:0;font-size:15px}
+#finrate .fr-category-browser {padding-bottom:calc(var(--category-island-gap) + var(--category-island-height) + 8px)}
+#finrate .fu-action-sheet {color:var(--ink);background:var(--bg);border:0;border-radius:24px 24px 0 0;width:min(100%,480px);max-width:100%;padding:16px 24px max(16px,env(safe-area-inset-bottom));margin:auto auto 0}
+#finrate .fu-action-sheet:focus {outline:none}
+#finrate .fu-action-sheet::backdrop {background:#0007}
+#finrate .fu-sheet-inner {display:grid;gap:8px}
+#finrate .fu-sheet-inner button {margin:0;min-height:48px}
+#finrate .fr-section-field.fu-field:has(.fu-field-caption) {border:1px solid var(--line);border-radius:14px;background:var(--panel);gap:0}
+#finrate .fu-field-caption {color:var(--dim);font-size:13px;padding:9px 12px 0}
+#finrate .fr-section-field.fu-field:has(.fu-field-caption) input {background:transparent;border:0}
+#finrate .fr-section-field.fu-field input:not([type=checkbox]),#finrate .fr-section-field .fr-field-trigger {min-height:50px;font-size:17px}
+#finrate .fr-section-field input::placeholder {color:var(--dim);opacity:1;font-weight:500}
+#finrate .fr-select-popover button:not(.fu-select-confirm),#finrate .fr-menu-item,#finrate .fr-account-popover .fr-section-secondary {
+  font-size:15px;font-weight:550;line-height:1.2;white-space:nowrap;
+}
+#finrate .fr-select-popover button > span:first-child,#finrate .fr-menu-item,#finrate .fr-account-popover .fr-section-secondary {overflow:hidden;text-overflow:ellipsis}
+
+/* FIRST USE 03: floating controls, contextual help, and compact summary. */
+#finrate :is(button,summary,input,select,textarea,a):focus-visible,
+.fu-help-dialog :is(button,input):focus-visible {
+  outline:2px solid var(--palette-6); outline-offset:-2px;
+}
+#finrate .fr-note-textarea:focus {outline:none;box-shadow:none}
+#finrate .fr-app {padding-bottom:0}
+#finrate .fr-app:has(.fr-screen > .fr-header + .np-body, .fr-review-body) {
+  padding-top:0;
+}
+#finrate .fr-screen:has(>.fr-header + .np-body, >.fr-review-body) {
+  --header-overlay:calc(80px + env(safe-area-inset-top));
+}
+#finrate .fr-screen:has(>.fr-header + .np-body, >.fr-review-body)>.fr-header {
+  height:var(--header-overlay)!important;
+  padding-top:calc(16px + env(safe-area-inset-top))!important;
+}
+#finrate .fr-screen:has(>.fr-header + .np-body, >.fr-review-body)>.fr-header .fr-back {
+  top:calc(16px + env(safe-area-inset-top))!important;
+}
+#finrate .fr-screen:has(>.fr-header + .np-body, >.fr-review-body)>.fr-header .fr-category-new {
+  top:calc(18px + env(safe-area-inset-top))!important;
+}
+#finrate .fr-app:has(.fr-screen > .fr-header + .np-body, .fr-review-body) .fr-stage .fr-persistent-menu {
+  top:calc(16px + env(safe-area-inset-top))!important;
+}
+#finrate .np-body {padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+#finrate .fr-screen {--header-overlay:80px}
+#finrate .fr-screen .fr-header {background:transparent}
+#finrate .fr-screen .fr-header:has(.fu-help-trigger) .fr-title {
+  overflow:visible; padding-inline:0 30px; max-width:100%; box-sizing:border-box;
+}
+#finrate .fr-header .fr-title > .fu-help-trigger {
+  inset:-15px 0 auto auto; place-items:center; z-index:2;
+}
+#finrate .fr-screen:has(>.fr-header + .np-body)>.fr-header {
+  z-index:2;pointer-events:none;
+}
+#finrate .fr-screen:has(>.fr-header + .np-body)>.fr-header :is(button,[data-full-name]) {pointer-events:auto}
+#finrate .fr-screen:has(>.fr-header + .np-body)>.np-body {
+  margin-top:calc(-1 * var(--header-overlay));
+  padding-top:calc(var(--header-overlay) + 12px);scroll-padding-top:var(--header-overlay);
+}
+#finrate .fr-screen:has(.fr-review-body)>.fr-header {pointer-events:none}
+#finrate .fr-screen:has(.fr-review-body)>.fr-header button {pointer-events:auto}
+#finrate .fr-screen:has(.fr-review-body)>.fr-review-body {
+  top:0;padding-top:var(--header-overlay);scroll-padding-top:var(--header-overlay);
+}
+#finrate .fr-screen:has(.fr-review-body)>[data-action=save] {bottom:max(20px,env(safe-area-inset-bottom))}
+#finrate .fr-category-search {position:absolute;inset:var(--category-search-top) 24px auto;margin:0;z-index:2}
+#finrate .fr-category-browser {padding-bottom:0;--category-island-gap:max(12px,env(safe-area-inset-bottom))}
+#finrate .fr-category-browser .np-body {
+  padding-block:calc(var(--category-search-top) + var(--category-search-height) + 12px) calc(var(--category-island-gap) + var(--category-island-height) + 12px);
+  scroll-padding-block:calc(var(--category-search-top) + var(--category-search-height) + 12px) calc(var(--category-island-gap) + var(--category-island-height) + 12px);
+}
+#finrate .fr-summary-settings {background:transparent}
+#finrate [data-section-page] .fr-month-result>.np-money {
+  min-width:0;white-space:nowrap;overflow-wrap:normal;font-size:clamp(24px,7.1vw,32px);
+}
+#finrate .fr-month-result {padding-right:37px;min-width:0}
+#finrate .fr-summary-category + .fr-summary-category {
+  border-top:1px solid var(--line);padding-top:14px;
+}
+#finrate .fr-operation-row.fu-category-operation .fr-operation-amount {grid-column:2;grid-row:1}
+#finrate .fr-operation-row.fu-category-operation .fr-operation-account {grid-column:1;grid-row:2}
+#finrate .fr-action-islands [data-section-action="distribution"] {
+  font-size:clamp(14px,4.2vw,17px);white-space:normal;
+}
+@media (max-width:360px) {
+  #finrate .fr-header:has(.fu-help-trigger) {padding-inline:76px!important}
+  #finrate .fr-screen .fr-header .fr-title {font-size:22px}
+}
+
+/* FIRST USE 04: the title and its help control share a center line. */
+#finrate .fu-title-group {
+  display:flex; align-items:center; gap:0; min-width:0; max-width:100%;
+}
+#finrate .fr-screen .fr-header .fu-title-group .fr-title {
+  padding:0; min-width:0; overflow-wrap:normal; overflow:visible;
+}
+#finrate .fu-title-group .fu-help-trigger {
+  position:relative; inset:auto; transform:none; flex:none; margin-inline-start:2px;
+  justify-items:start; padding-inline:8px 0;
+}
+#finrate .fr-month-result {
+  border:0; width:100%; text-align:start; padding-inline:12px;
+}
+#finrate .fr-info-dialog .fr-display-toggle {
+  font-size:inherit; gap:12px; border:0;
+}
+
+/* The scroll surface starts behind the floating header and its controls. */
+#finrate .fu-underlap > .fr-header {
+  position:relative; inset:auto; z-index:4; background:transparent; pointer-events:none;
+}
+#finrate .fu-underlap > .fr-header :is(button,[data-full-name]) {pointer-events:auto}
+#finrate .fu-underlap > :is(.fr-toolbar,.fr-month,.fr-payment-actions-search) {
+  position:relative; inset:auto; z-index:3; flex-shrink:0;
+}
+#finrate .fr-screen.fu-underlap > .fu-underlap-body {
+  position:relative; inset:auto; margin-top:calc(-1 * var(--fu-overlap, 0px));
+  padding-top:calc(var(--fu-overlap, 0px) + 12px);
+  scroll-padding-top:calc(var(--fu-overlap, 0px) + 12px);
+}
+#finrate .fr-screen[data-screen="filter-picker"] > .fr-primary {width:auto}
+
+#finrate .fr-screen.fu-underlap:has(>.fr-header+.np-body)>.np-body {margin-top:0;padding-top:12px}
+#finrate .fr-screen.fu-underlap:has(>.fr-header+.np-body)>.np-body.fu-underlap-body {margin-top:calc(-1 * var(--fu-overlap));padding-top:calc(var(--fu-overlap) + 12px)}
+#finrate .fu-underlap > .fr-category-browser.fu-underlap-body {padding-top:0}
+#finrate .fu-underlap > .fr-category-browser.fu-underlap-body .fr-category-search {top:calc(var(--fu-overlap) + var(--category-search-top))}
+#finrate .fu-underlap > .fr-category-browser.fu-underlap-body .np-body {padding-top:calc(var(--fu-overlap) + var(--category-search-top) + var(--category-search-height) + 12px)}
+
+#finrate .fr-screen.fu-underlap[data-screen="operations"] > .fr-header {z-index:4}
+#finrate .fr-screen.fu-underlap[data-screen="operations"] > .fr-toolbar {z-index:3}
+#finrate .fr-screen.fu-underlap[data-screen="operations"] > .fr-operation-list {
+  padding-top:calc(var(--fu-overlap) + 12px);
+  scroll-padding-top:calc(var(--fu-overlap) + 12px);
+}
+#finrate .fr-app:has(.fu-underlap) {padding-top:0}
+#finrate .fu-underlap > .fr-header {
+  height:calc(80px + env(safe-area-inset-top))!important;
+  padding-top:calc(16px + env(safe-area-inset-top))!important;
+}
+#finrate .fu-underlap > .fr-header .fr-back {top:calc(16px + env(safe-area-inset-top))!important}
+#finrate .fu-underlap > .fr-header .fr-category-new {top:calc(18px + env(safe-area-inset-top))!important}
+
+/* Put the fade on its own layer between the scrolling material and islands. */
+#finrate .fu-underlap, #finrate .fr-screen:has(>.fr-review-body) {position:relative;isolation:isolate}
+#finrate .fu-underlap::before,
+#finrate .fr-screen:has(>.fr-review-body)::before {
+  content:'';position:absolute;z-index:1;inset:0 0 auto;
+  height:var(--fu-overlap,var(--header-overlay,80px));pointer-events:none;
+  -webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px);
+  background:color-mix(in srgb,var(--bg) 86%,transparent);
+  -webkit-mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,.91) 35%,rgba(0,0,0,.48) 72%,transparent);
+  mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,.91) 35%,rgba(0,0,0,.48) 72%,transparent);
+}
+#finrate .fu-underlap:has(>.fr-category-browser)::before {
+  height:calc(var(--fu-overlap) + var(--category-search-top,12px) + var(--category-search-height,48px) + 4px);
+}
+#finrate .fu-underlap > :is(.fr-section-tabs,.fr-section-calendar) {position:relative;z-index:3}
+#finrate .fr-summary-details h2 {margin:0 0 8px;text-align:center;font-size:18px}
+#finrate .fr-summary-group {padding:10px 0}
+#finrate .fr-summary-group + .fr-summary-group {border-top:1px solid var(--line)}
+#finrate .fr-summary-group > .np-link {padding-block:9px}
+#finrate .fr-summary-group > .np-row {margin:0;padding-block:7px}
+#finrate .fr-summary-group > .fr-muted {display:block;padding-block:0 8px}
+.fu-help-dialog [data-fu-close] {border:0;border-radius:0;background:transparent;box-shadow:none}
+
+@media (prefers-reduced-motion:no-preference) {
+  :is(.fu-help-dialog,.fr-info-dialog,.fu-action-sheet)[open]::backdrop {
+    animation:fu-backdrop-in 220ms ease-out both;
+  }
+  :is(.fu-help-dialog,.fr-info-dialog,.fu-action-sheet)[open][data-closing]::backdrop {
+    animation:fu-backdrop-out 145ms ease-in both;
+  }
+}
+@keyframes fu-backdrop-in {from {opacity:0} to {opacity:1}}
+@keyframes fu-backdrop-out {from {opacity:1} to {opacity:0}}
+
+/* Operations share the same fade as the summary; each control is an island. */
+#finrate .fr-screen.fu-underlap[data-screen="operations"] > :is(.fr-header,.fr-toolbar,.fr-operation-list) {
+  background:transparent;
+}
+#finrate .fr-screen[data-screen="operations"] > .fr-toolbar {pointer-events:none}
+#finrate .fr-toolbar :is(input,button) {pointer-events:auto}
+#finrate .fr-toolbar input {border:0}
+
+#finrate .fr-header:has(.fu-income-plans-title) {padding-inline:74px 20px!important}
+#finrate .fr-header .fu-income-plans-title {white-space:nowrap}
+#finrate .fu-help-page .fu-help-search {display:block;margin:0 24px 12px;padding:0;flex:none}
+#finrate .fu-help-page .fu-help-body {flex:1;min-height:0;padding:0 24px max(24px,env(safe-area-inset-bottom))}
+#finrate .fu-help-page .fu-help-body .np-link > span {display:block}
+#finrate .fu-help-page .fr-title:focus,
+.fu-help-dialog #fu-help-title:focus {outline:0}
+#finrate :is(.fr-info-dialog,.fu-action-sheet,.fr-select-popover,.fr-account-popover) button,
+.fu-help-dialog button {border:0}
+#finrate :is(.fr-info-dialog,.fu-action-sheet,.fr-select-popover,.fr-account-popover,.fu-help-page) :is(button,input):focus-visible,
+.fu-help-dialog :is(button,input):focus-visible {
+  outline:0;filter:brightness(1.14);
+}
+#finrate :is(.fr-primary,.fu-select-confirm):not(:disabled) {border:0}
+#finrate :is(.fr-menu,.fr-form-account,.fr-field-trigger,.fr-home-header .fr-quick-home-entry) {
+  border:0;
+}
+#finrate .fr-select-popover .fu-select-confirm:not(:disabled) {
+  background:#0669d6;color:#fff;
+}
+#finrate button:focus-visible {
+  outline:0;filter:brightness(1.14);
+}
+
+/* FIRST USE 07 */
+#finrate .fu-action-sheet [data-sheet-close] {
+  color:var(--palette-12);background:var(--palette-11);text-decoration:none;
+}
+#finrate .fu-income-group > h2 {font-size:16px;margin:0 0 10px;color:var(--dim)}
+#finrate .fu-income-group + .fu-income-group {margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+#finrate .fu-income-group .fr-income-plan-row {
+  padding:12px;margin-bottom:8px;border-radius:16px;background:var(--panel);
+}
+#finrate .fu-income-group .fr-income-plan-row:active {background:var(--soft)}
+#finrate .fu-income-total {display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}
+.fu-help-body .fu-topic-card {
+  display:block;box-sizing:border-box;width:100%;min-height:48px;margin:0;
+  padding:12px 14px;border:0;border-radius:15px;
+  background:var(--palette-2);color:inherit;text-align:left;font:inherit;
+}
+.fu-help-body .fu-topic-card + .fu-topic-card {margin-top:8px}
+.fu-help-body .fu-topic-card > span {display:block;width:100%;text-align:left}
+.fu-help-body .fu-topic-card .fr-muted {
+  display:block;max-width:none;margin-top:4px;text-align:left;color:var(--palette-6);
+}
+#finrate .fu-help-page .fu-help-search {position:relative;z-index:3}
+#finrate .fu-help-page.fu-underlap > .fu-help-body.fu-underlap-body {
+  padding-top:calc(var(--fu-overlap) + 12px);
+}
+#finrate .fu-help-page [data-fu-back] {
+  background:var(--panel);border:0;border-radius:16px;
+}
+#finrate .fr-header.fu-title-room {padding-inline:var(--fu-title-left) var(--fu-title-right)!important}
+#finrate .fr-header.fu-title-room .fr-title,
+#finrate .fr-header .fr-title.fu-measure-title {white-space:nowrap}

@@ -33,3 +33,38 @@ export function clearedDocument(d,mode){
 }
 // Compare the complete parsed container independent of JSON property ordering.
 export function sameContainer(a,b){const stable=x=>x&&typeof x==='object'?Array.isArray(x)?x.map(stable):Object.fromEntries(Object.keys(x).sort().map(k=>[k,stable(x[k])])):x;return JSON.stringify(stable(a))===JSON.stringify(stable(b));}
+
+export function clearedFirstUse(d,options){
+ const n=clearedDocument(d,'financial');
+ if(!options.categories)n.categories=[];
+ if(options.accounts){
+  n.accounts=copy(d.accounts);
+  for(const account of n.accounts){
+   account.opening=0;
+   if(account.credit){
+    delete account.credit.openingOwn;
+    delete account.credit.openingLots;
+    delete account.credit.statement;
+   }
+  }
+  if(n.monthBudget&&d.monthBudget.primaryAccountId)n.monthBudget.primaryAccountId=d.monthBudget.primaryAccountId;
+ }
+ const detach=row=>{
+  if(!options.accounts)row.accountId=null;
+  if(!options.categories)row.categoryId=null;
+  return row;
+ };
+ if(options.plans&&d.planning){
+  n.planning.incomes=copy(d.planning.incomes);
+  for(const plan of n.planning.incomes){detach(plan);plan.schedules?.forEach(detach);}
+ }
+ const paymentNames=d.payments?.names||[];
+ if(options.payments==='keep'&&d.payments){
+  n.payments={version:1,plans:copy(d.payments.plans),occurrences:[],links:[],names:copy(paymentNames)};
+  for(const plan of n.payments.plans){delete plan.history;plan.versions.forEach(detach);}
+ }else if(options.payments==='names'){
+  const names=[...new Set([...paymentNames,...(d.payments?.plans||[]).map(p=>p.versions.at(-1).name)])];
+  n.payments={version:1,plans:[],occurrences:[],links:[],names};
+ }
+ return validateDocument(n);
+}

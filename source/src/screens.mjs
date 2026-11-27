@@ -1,4 +1,4 @@
-import {monthlyOverview} from './engine/month-budget.mjs';
+import {distributionConfigured,monthlyOverview} from './engine/month-budget.mjs';
 
 const paths={
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
@@ -40,7 +40,7 @@ export const home=()=>`<div class="fr-home-header"><div class="fr-brand">FinRate
 const groups=[
   ['Учёт',[['Операции','operations'],['Перевод','transfer'],['Счета и кошельки','accounts'],['Категории','categories']]],
   ['Планы и отчёты',[['Платежи','payments'],['Планы доходов','income-plans'],['Накопления','savings']]],
-  ['Настройки и помощь',[['Настройки сводки','budget-settings'],['Управление данными','data-management']]]
+  ['Настройки и помощь',[['Управление данными','data-management'],['Знакомство с FinRate','help']]]
 ];
 export function menu(open) {
   return heading('Меню')+`<nav id="fr-menu-panel" class="fr-menu-list" aria-label="Разделы FinRate">${groups.map(([title,items])=>`<details class="fr-menu-accordion" data-menu-group="${esc(title)}" ${open===title?'open':''}><summary>${esc(title)}<span class="fr-fold" aria-hidden="true">${icon('down')}</span></summary><div class="fr-menu-children">${items.map(([label,action])=>`<button type="button" class="fr-menu-item" data-action="${action}">${label}</button>`).join('')}</div></details>`).join('')}</nav>`;
@@ -64,18 +64,18 @@ export function budgetBar(plan,spent,funded=0) {
 export function categoryRows(doc,kind,chosen,query,locked='',date='',amount=0,previous=null) {
   const q=query.toLocaleLowerCase('ru').trim();
   const month=date.slice(0,7);
-  const budget=kind==='expense'&&month?monthlyOverview(doc,month):null;
+  const budget=kind==='expense'&&month&&distributionConfigured(doc,month)?monthlyOverview(doc,month):null;
   const items=doc.categories.filter(c=>c.type===kind&&!c.archived&&!c.mergedInto);
   const hits=items.filter(c=>!c.parentId&&(!locked||c.id===locked)).flatMap(parent=>{
     const parentMatch=parent.name.toLocaleLowerCase('ru').includes(q);
     const children=items.filter(c=>c.parentId===parent.id&&(parentMatch||c.name.toLocaleLowerCase('ru').includes(q)));
     if(!parentMatch&&!children.length)return [];
     const option=c=>`<button type="button" class="fr-operation-picker-choice ${c.parentId?'fr-operation-picker-child':''}" data-category="${esc(c.id)}" aria-pressed="${chosen===c.id}"><span>${esc(c.name)}</span>${selectionMark(chosen===c.id)}</button>`;
-    const c=budget?.categories.find(row=>row.id===parent.id&&!row.savings);
+    const c=budget?.expected&&budget.categories.find(row=>row.id===parent.id&&!row.savings);
     const prior=previous?.date.startsWith(month)?previous.allocations.filter(a=>a.categoryId===parent.id||
       items.some(item=>item.id===a.categoryId&&item.parentId===parent.id)).reduce((sum,a)=>sum+a.amount,0):0;
     const excess=c?Math.max(0,c.spent-prior+amount-c.plan):0;
-    const budgetMarkup=c?`<div class="fr-picker-budget">${c.spent>c.plan?'Сверх плана':'Осталось по плану'} <strong>${amountText(Math.abs(c.plan-c.spent))}</strong>
+    const budgetMarkup=c&&(c.bps>0||c.spent>0||amount>0)?`<div class="fr-picker-budget">${c.spent>c.plan?'Сверх плана':'Осталось по плану'} <strong>${amountText(Math.abs(c.plan-c.spent))}</strong>
       ${budgetBar(c.plan,c.spent,c.funded)}${amount>0&&excess?'<small>После записи сверх плана на '+amountText(excess)+'</small>':''}</div>`:'';
     return `<section class="fr-payment-actions-group ${budget?'fr-expense-picker-group':''}">${option(parent)}${budgetMarkup}${children.map(option).join('')}</section>`;
   });
@@ -85,12 +85,13 @@ export function categoryRows(doc,kind,chosen,query,locked='',date='',amount=0,pr
 export function categoryPicker(doc,draft,query,showCreate,locked='',amount=0,previous=null) {
   const plus=`<button type="button" class="fr-category-new" data-action="category-create-menu" aria-label="Создать категорию или подкатегорию" aria-expanded="${showCreate}">${icon('plus')}</button>`;
   return heading('Категория','',plus)+`<div class="fr-payment-actions-search"><input type="search" data-search-category placeholder="Поиск" aria-label="Поиск категории или подкатегории" autocomplete="off" value="${esc(query)}"></div><div class="fr-payment-actions-list" data-category-results>${categoryRows(doc,draft.kind,draft.categoryId,query,locked,draft.date,amount,previous)}</div>`+
+    primary('Далее','category-next',draft.categoryId&&!showCreate?'':'disabled')+
     (showCreate?`<div class="fr-operation-create-menu">${locked?'':'<button type="button" data-action="new-category">Создать категорию</button>'}<button type="button" data-action="new-subcategory">Создать подкатегорию</button></div>`:'');
 }
 
 export function createCategoryScreen(form,parents) {
   if(form.sub&&!form.parentId){
-    return heading('В какую категорию?')+`<div class="fr-payment-actions-list">${parents.map(c=>`<button type="button" class="fr-operation-picker-choice" data-parent="${esc(c.id)}">${esc(c.name)}</button>`).join('')}</div>`;
+    return heading('В какую категорию?')+`<div class="fr-payment-actions-list">${parents.map(c=>`<button type="button" class="fr-operation-picker-choice" data-parent="${esc(c.id)}" aria-pressed="${c.id===form.parentChoice}">${esc(c.name)}${selectionMark(c.id===form.parentChoice)}</button>`).join('')}</div>`+primary('Далее','parent-next',form.parentChoice?'':'disabled');
   }
   return heading(form.sub?'Новая подкатегория':'Новая категория')+`<div class="fr-create-body fr-body"><input class="fr-input" data-name value="${esc(form.name)}" placeholder="Название" aria-label="Название" autocomplete="off" maxlength="100"><p class="fr-create-error" role="alert">${esc(form.error)}</p></div>`+primary('Добавить','save-category',form.name.trim()?'':'disabled');
 }
@@ -105,7 +106,7 @@ export function calendar(kind,y,m,selected,today,title) {
     const date=isoMonth(y,m)+'-'+String(i+1).padStart(2,'0');
     return `<button type="button" class="fr-day" data-date="${date}" aria-label="${dateText(date)}" aria-pressed="${selected===date}" ${date===today?'aria-current="date"':''}>${i+1}</button>`;
   });
-  return heading(title||labels[kind],kind)+`<div class="fr-body fr-calendar">${monthHeader(y,m)}<div class="fr-week" aria-hidden="true">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(label=>`<span>${label}</span>`).join('')}</div><div class="fr-days" role="group" aria-label="Выбрать дату">${'<span aria-hidden="true"></span>'.repeat(offset)}${days.join('')}</div><button type="button" class="fr-calendar-today" data-date="${today}">Сегодня</button></div>`;
+  return heading(title||labels[kind],kind)+`<div class="fr-body fr-calendar">${monthHeader(y,m)}<div class="fr-week" aria-hidden="true">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(label=>`<span>${label}</span>`).join('')}</div><div class="fr-days" role="group" aria-label="Выбрать дату">${'<span aria-hidden="true"></span>'.repeat(offset)}${days.join('')}</div><button type="button" class="fr-calendar-today" data-date="${today}" aria-pressed="${selected===today}">Сегодня</button></div>`+primary('Далее','date-next',selected?'':'disabled');
 }
 
 const accountTypes={debit:'Безнал',cash:'Наличные',credit:'Кредитная карта'};
@@ -128,13 +129,17 @@ export function accountChoices(doc,balances,selected,operationKind,primaryId,sel
     }).join('')}</section>`;
   }).join('');
 }
+export function withoutAccount(selected,attributes) {
+  return `<button type="button" class="fr-operation-picker-choice fu-no-account" ${attributes} aria-pressed="${selected===null}">
+    <span>Без счёта<span class="fr-payment-actions-parent">Остатки счетов не изменятся</span></span>${selectionMark(selected===null)}</button>`;
+}
 export function accounts(doc,balances,selected,operationKind,{shortfall=0,transfer=false,primaryId=''}={}){
-  const rows=accountChoices(doc,balances,selected,operationKind,primaryId);
+  const rows=accountChoices(doc,balances,selected,operationKind,primaryId)+withoutAccount(selected,'data-account=""');
   const warning=shortfall?`<aside class="fr-funds-warning">
     <div role="status"><strong>Не хватает ${amountText(shortfall)}</strong><p>Выберите другой счёт${transfer?' или сделайте перевод':''}.</p></div>
     ${transfer?'<button type="button" class="fr-section-secondary" data-action="fund-expense">Сделать перевод</button>':''}</aside>`:'';
   return heading('Счёт')+`<div class="fr-payment-actions-list">${warning}${rows||'<p class="fr-no-operations">Нет доступных счетов.</p>'}</div>`+
-    (rows?primary('Далее','account-next',selected&&!shortfall?'':'disabled'):primary('Добавить счёт','first-account'));
+    primary('Далее','account-next',selected!==undefined&&!shortfall?'':'disabled');
 }
 
 export function categoryLabel(doc,id) {
@@ -153,7 +158,7 @@ ${reviewRow('amount','Изменить сумму',enteredMoney(draft.amount),'p
 ${reviewRow('category','Выбрать категорию',esc(name)+(overspent?`<span class="fr-payment-actions-parent fr-over-budget">Бюджет категории «${esc(overspent)}» превышен</span>`:parent?`<span class="fr-payment-actions-parent">${esc(parent)}</span>`:''),'pencil','',readonly)}
 ${reviewRow('date','Изменить дату',esc(dateText(draft.date)),'calendar','',readonly)}
 ${draft.creditDueDate?reviewRow('credit-date','Изменить срок погашения',esc(dateText(draft.creditDueDate)),'calendar','',readonly):''}
-${reviewRow('account','Выбрать счёт операции',account?esc(account.name)+`<span class="fr-selected-account-type">${accountMark(account)}</span>`:'Выбрать счёт','account','fr-account',readonly)}
+${(doc.accounts.some(a=>!a.archived)||account)?reviewRow('account','Выбрать счёт операции',account?esc(account.name)+`<span class="fr-selected-account-type">${accountMark(account)}</span>`:'Без счёта','account','fr-account',readonly):''}
 <button type="button" class="fr-review-row fr-editable-row fr-note-link" data-edit="note">${draft.note?'Заметка<span class="fr-note-present" aria-hidden="true"></span>':'Добавить заметку'}</button>
 </div>${previous?`<div class="fr-operation-actions">${refundable&&!readonly?'<button type="button" class="fr-history-link" data-action="refund">Записать возврат</button>':''}<button type="button" class="fr-history-link" data-action="history">История изменений</button>${previous.cancelled?'<p class="fr-no-operations">Операция отменена</p>':archived?'<p class="fr-no-operations">Счёт в архиве</p>':'<button type="button" class="fr-cancel-link" data-action="cancel">Отменить операцию</button>'}</div>`:''}<p class="fr-create-error" role="alert">${esc(error)}</p></div>`+
   (previous?.cancelled||archived?'':primary('Сохранить','save',busy||previous&&!dirty?'disabled':''));
@@ -172,15 +177,16 @@ export function recentOperationRows(doc,rows,accountId){
   }).join('')||'<p class="fr-no-operations">Операций пока нет.</p>';
 }
 
-export function operationRows(doc,rows,query=''){
+export function operationRows(doc,rows,query='',categoryContext=''){
   const normalize=s=>s.normalize('NFKC').toLocaleLowerCase('ru').replaceAll('ё','е');
   const q=normalize(query).trim();
   const terms=q.split(/\s+/).filter(Boolean);
   let day;
   return rows.slice().reverse().sort((a,b)=>b.date.localeCompare(a.date)).map(o=>{
-    const category=categoryLabel(doc,o.allocations[0]?.categoryId);
+    const part=categoryContext?o.allocations.find(a=>a.categoryId===categoryContext||doc.categories.find(c=>c.id===a.categoryId)?.parentId===categoryContext):o.allocations[0];
+    const category=categoryLabel(doc,part?.categoryId);
     const type=operationTypes[o.kind]||'Операция';
-    const account=doc.accounts.find(a=>a.id===o.accountId)?.name||'';
+    const account=doc.accounts.find(a=>a.id===o.accountId)?.name||(o.accountId===null?'Без счёта':'');
     const destination=doc.accounts.find(a=>a.id===o.toAccountId)?.name;
     const categoryName=o.allocations[0]?.categoryId ? [category.parent,category.name].filter(Boolean).join(' ') : '';
     const haystack=normalize([type,categoryName,account,destination,o.note].filter(Boolean).join(' '));
@@ -188,9 +194,9 @@ export function operationRows(doc,rows,query=''){
     const group=o.date!==day?`<h2 class="fr-operation-date">${dateText(o.date)}</h2>`:'';
     day=o.date;
     const accountPath=destination?[account,destination].filter(Boolean).join(' → '):account;
-    return group+`<button type="button" class="fr-operation-row ${o.cancelled?'fr-cancelled':o.kind}" data-operation="${esc(o.id)}">
-      <span class="fr-operation-name">${type}</span><span class="fr-operation-amount">${['income','refund'].includes(o.kind)?'+':o.kind==='expense'?'−':''}${amountText(o.amount)}</span>
-      ${categoryName?`<span class="fr-operation-category">${esc(category.name)}${category.parent?`<small>${esc(category.parent)}</small>`:''}</span>`:''}
+    return group+`<button type="button" class="fr-operation-row ${categoryContext?'fu-category-operation':''} ${o.cancelled?'fr-cancelled':o.kind}" data-operation="${esc(o.id)}">
+      ${!categoryContext?`<span class="fr-operation-name">${type}</span>`:category.parent?`<span class="fr-operation-name">${esc(category.name)}</span>`: ''}<span class="fr-operation-amount">${['income','refund'].includes(o.kind)?'+':o.kind==='expense'?'−':''}${amountText(categoryContext&&part?part.amount:o.amount)}</span>
+      ${categoryName&&!categoryContext?`<span class="fr-operation-category">${esc(category.name)}${category.parent?`<small>${esc(category.parent)}</small>`:''}</span>`:''}
       ${accountPath?`<span class="fr-operation-account">${esc(accountPath)}</span>`:''}
       ${o.cancelled?'<span class="fr-operation-status">Операция отменена</span>':''}</button>`;
   }).join('')||`<p class="fr-no-operations">${q?'Операции не найдены.':'Операций пока нет.'}</p>`;

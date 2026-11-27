@@ -22,9 +22,12 @@ export const monthEnd = month => {
 function ratesAt(d, month) {
   return data(d).rates.filter(v => v.month <= month).at(-1)?.shares || {};
 }
+export const distributionConfigured=(d,month)=>Object.hasOwn(data(d).monthShares||{},month)||data(d).rates.some(row=>row.month<=month);
 export const rateAt = (d,id,month) => (data(d).monthShares?.[month] || ratesAt(d,month))[id] || 0;
-export const primaryAccount = d => d.accounts.find(a=>a.id===data(d).primaryAccountId&&!a.archived&&a.financeType!=='credit') ||
-  d.accounts.find(a=>!a.archived&&a.financeType!=='credit');
+export const primaryAccount = (d,{allowCredit=true}={}) => {
+  const active=d.accounts.filter(a=>!a.archived&&(allowCredit||a.financeType!=='credit'));
+  return active.find(a=>a.id===data(d).primaryAccountId) || active.find(a=>a.financeType!=='credit') || active[0];
+};
 export function expenseShortfall(account,balance,amount,previous){
   if(!account)return 0;
   const restored=previous?.kind==='expense'&&!previous.cancelled&&!previous.pending&&previous.accountId===account.id?previous.amount:0;
@@ -32,7 +35,7 @@ export function expenseShortfall(account,balance,amount,previous){
   return Math.max(0,amount-(balance+limit+restored));
 }
 export function setPrimaryAccount(d,id){
-  if(!d.accounts.some(a=>a.id===id&&!a.archived&&a.financeType!=='credit'))fail('SELECTION');
+  if(!d.accounts.some(a=>a.id===id&&!a.archived))fail('SELECTION');
   write(d).primaryAccountId=id;
 }
 export function saveMonthShares(d,month,changes){
@@ -167,7 +170,7 @@ export function saveSavingsGoal(d, {id,name,target,due,bps,today}) {
     addCategory(d,{id,name,type:'expense'});
     goals.push({categoryId:id,target,due,start:today});
   }
-  saveShares(d,today.slice(0,7),{[id]:bps});
+  if(bps!==undefined)saveShares(d,today.slice(0,7),{[id]:bps});
 }
 
 export function assignSavings(d, entry) {

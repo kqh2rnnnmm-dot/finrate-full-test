@@ -1,6 +1,6 @@
 {
   "name": "finrate-full",
-  "version": "0.2.0-test.14",
+  "version": "0.2.0-test.15",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "test:visual": "node tests/visual-patch.mjs",
     "test:ux": "node tests/ux-audit.mjs",
     "test:patch04": "node tests/patch-04.mjs",
-    "test:category-history": "node tests/category-history.mjs"
+    "test:category-history": "node tests/category-history.mjs",
+    "test:first-use": "node tests/run-first-use.mjs"
   },
   "dependencies": {
     "dexie": "4.4.6"

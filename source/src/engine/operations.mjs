@@ -62,9 +62,9 @@ export function saveOperation(d,input,{editId=null,editBase=null,draftId=null,fe
       Object.assign(o,{stage:inTransit?'waiting':'received',debitDate:inTransit?null:input.date,creditDate:inTransit?null:input.date,returnDate:null,feeMode,enteredAmount:input.amount,request});
       if(fee){post(n,{id:id+'-fee',kind:'expense',date:input.date,accountId:input.accountId,amount:fee,allocations:[{categoryId:feeCategoryId,amount:fee}],referenceId:id,note:'Комиссия перевода',creditDueDate:input.creditDueDate});n.operations.at(-1).pending=inTransit;}
     }else post(n,input);
-    if(d.schema>=4){assertSpending(d,n);assertKnownCreditDates(d,n);const saved=n.operations.find(o=>o.id===(editId||input.id));if(saved)saved.balanceSnapshot=balanceSnapshot(editId?{...d,operations:d.operations.filter(o=>o.id!==editId&&!(o.kind==='expense'&&o.referenceId===editId))}:d,n,input);}
+    if(d.schema>=4){assertSpending(d,n);assertKnownCreditDates(d,n);const saved=n.operations.find(o=>o.id===(editId||input.id));if(saved&&input.accountId!==null)saved.balanceSnapshot=balanceSnapshot(editId?{...d,operations:d.operations.filter(o=>o.id!==editId&&!(o.kind==='expense'&&o.referenceId===editId))}:d,n,input);}
     if(draftId)n.drafts=n.drafts.filter(x=>x.id!==draftId);
-    n.settings.lastAccountId=input.accountId;return true;
+    if(input.accountId!==null)n.settings.lastAccountId=input.accountId;return true;
   });
 }
 export function cancelOperation(d,id){return apply(d,n=>{

@@ -32,7 +32,11 @@ function unique(rows,limit){if(!Array.isArray(rows)||rows.length>limit)fail('SIZ
 
 export function validatePayments(d){
  const p=d.payments;if(p===undefined)return;
- if(!p||p.version!==1||Object.keys(p).some(k=>!['version','plans','occurrences','links'].includes(k)))fail('PAYMENT');
+ if(!p||p.version!==1||Object.keys(p).some(k=>!['version','plans','occurrences','links','names'].includes(k)))fail('PAYMENT');
+ if(p.names!==undefined){
+  if(!Array.isArray(p.names)||p.names.length>2000||new Set(p.names).size!==p.names.length)fail('PAYMENT');
+  for(const name of p.names)text(name);
+ }
  unique(p.plans,2000);unique(p.occurrences,MAX_ROWS);
  if(!Array.isArray(p.links)||p.links.length>MAX_ROWS)fail('SIZE');
  const plans=new Map();for(const r of p.plans){
@@ -108,7 +112,7 @@ export function savePaymentPlan(d,input,today){return atomic(d,n=>{
   if((last.start!==start||last.repeat!==v.repeat)&&p.occurrences.some(r=>r.planId===old.id&&r.date>today&&p.links.some(l=>l.occurrenceId===r.id)))fail('PAYMENT_SCHEDULE');
   freeze(n,old,today);old.history??=[];old.history.push({at:now(),action:'future',before:copy(last),after:copy(v)});old.versions=old.versions.filter(r=>r.from<v.from);old.versions.push(v);return old.id;
  }
- const id=input.id||uid();text(id);if(p.plans.some(r=>r.id===id))fail('DUPLICATE');p.plans.push({id,createdAt:now(),versions:[v],pauses:[]});return id;
+ const id=input.id||uid();text(id);if(p.plans.some(r=>r.id===id))fail('DUPLICATE');p.plans.push({id,createdAt:now(),versions:[v],pauses:[]});if(p.names)p.names=p.names.filter(name=>name!==v.name);return id;
 });}
 export function setPaymentPaused(d,id,pause,today){return atomic(d,n=>{
  date(today);if(typeof pause!=='boolean')fail('PAYMENT');const plan=n.payments.plans.find(r=>r.id===id);if(!plan)fail('NOT_FOUND');const open=plan.pauses.find(p=>p.to===null);if(!!open===pause)return false;
