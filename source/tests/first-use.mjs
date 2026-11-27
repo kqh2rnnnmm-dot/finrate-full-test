@@ -286,6 +286,32 @@ try {
     await back();
     await button('Предыдущий месяц').click();
     assert.equal(await page.locator('.fr-summary-category .fr-budget-bar').count(),3);
+    await page.locator('.fr-summary-category [data-section-action=share]').filter({hasText:'Продукты'}).click();
+    const history=page.locator('.fr-share-history');
+    await history.locator('[data-operation]').first().waitFor();
+    const historyHeader=()=>history.evaluate(body=>{
+      const screen=body.parentElement;
+      const header=screen.querySelector('.fr-header');
+      const back=header.querySelector('.fr-back');
+      const center=node=>{const {top,height}=node.getBoundingClientRect();return top+height/2;};
+      const month=screen.querySelector('.fr-month');
+      const mask=getComputedStyle(screen,'::before');
+      return {arrow:center(back),title:center(header.querySelector('.fr-title')),month:center(month),
+        topLayer:Number(getComputedStyle(header).zIndex),monthLayer:Number(getComputedStyle(month).zIndex),
+        blurLayer:Number(mask.zIndex),maskHeight:parseFloat(mask.height),
+        monthBottom:month.getBoundingClientRect().bottom-screen.getBoundingClientRect().top,
+        arrowClickable:back.contains(document.elementFromPoint(back.getBoundingClientRect().left+24,center(back)))};
+    });
+    const beforeScroll=await historyHeader();
+    assert.ok(Math.abs(beforeScroll.arrow-beforeScroll.title)<1,'back arrow aligns with category title');
+    assert.ok(beforeScroll.topLayer>beforeScroll.monthLayer&&beforeScroll.monthLayer>beforeScroll.blurLayer);
+    assert.ok(beforeScroll.maskHeight>beforeScroll.monthBottom,'blur covers the whole month control');
+    assert.equal(beforeScroll.arrowClickable,true);
+    await history.evaluate(el=>{el.scrollTop=el.scrollHeight;});
+    if(mobile)assert.ok(await history.evaluate(el=>el.scrollTop)>0);
+    assert.deepEqual(await historyHeader(),beforeScroll);
+    await back();
+    assert.equal(await page.locator('.fr-summary-category .fr-budget-bar').count(),3);
     await back();
 
     await menu('Настройки и помощь','Знакомство с FinRate');

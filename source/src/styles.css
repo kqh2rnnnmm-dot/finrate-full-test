@@ -421,8 +421,8 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
 #finrate .fr-share-save{position:absolute;inset:auto 24px max(12px,env(safe-area-inset-bottom));z-index:2;pointer-events:none}
 #finrate .fr-share-save .fr-primary{width:100%;margin:0;box-shadow:0 6px 18px var(--palette-19);pointer-events:auto}
 #finrate .fr-screen:has([data-share-room]) .fr-title{font-size:19px;line-height:1.18}
-#finrate .fr-screen:has([data-share-room]) .fr-header{height:auto!important;padding-block:11px!important}
-#finrate .fr-screen:has([data-share-room]) .fr-back{top:50%!important;transform:translateY(-50%)}
+#finrate .fr-screen:not(.fu-underlap):has([data-share-room]) .fr-header{height:auto!important;padding-block:11px!important}
+#finrate .fr-screen:not(.fu-underlap):has([data-share-room]) .fr-back{top:50%!important;transform:translateY(-50%)}
 
 #finrate .fr-category-group-row{border:0;padding:0}
 #finrate .fr-category-group-heading{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;gap:8px}
@@ -1049,6 +1049,13 @@ html,body{margin:0;min-height:100%;background:var(--palette-1);overscroll-behavi
   background:color-mix(in srgb,var(--bg) 86%,transparent);
   -webkit-mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,.91) 35%,rgba(0,0,0,.48) 72%,transparent);
   mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,.91) 35%,rgba(0,0,0,.48) 72%,transparent);
+}
+/* Keep the history legible as it scrolls under the entire month picker. */
+#finrate .fu-underlap:has(>.fr-share-history)::before {
+  --history-mask:linear-gradient(to bottom,#000 var(--fu-overlap),transparent);
+  height:calc(var(--fu-overlap) + 8px);
+  -webkit-mask-image:var(--history-mask);
+  mask-image:var(--history-mask);
 }
 #finrate .fu-underlap:has(>.fr-category-browser)::before {
   height:calc(var(--fu-overlap) + var(--category-search-top,12px) + var(--category-search-height,48px) + 4px);
